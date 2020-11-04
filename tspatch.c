@@ -8,7 +8,7 @@
 #include <libgen.h> /* for basename */
 
 /******************************/
-/*** MACROS&TYPES: LANGUAGE ***/
+/*** MACROS & TYPES: C CODE ***/
 /******************************/
 
 #define FALSE 0
@@ -31,9 +31,9 @@ typedef unsigned long  uint32_t;
 #define WRITE_12BITS(p,v)   ()
 #define WRITE_08BITS(p,v)   ()
 
-/**************************/
-/*** MACROS&TYPES: MPEG ***/
-/**************************/
+/****************************/
+/*** MACROS & TYPES: MPEG ***/
+/****************************/
 
 #define NB_MAX_ES_IN_PMT 20
 #define PMT_INFO_MAX_SIZE 1
@@ -139,9 +139,9 @@ static void init_prog(prog_t *prog)
   prog->video_pid = INVALID_PID;
 }
 
-/*************************/
-/*** MACROS&TYPES: DVB ***/
-/*************************/
+/***************************/
+/*** MACROS & TYPES: DVB ***/
+/***************************/
 
 #define NIT_PID (0x10)
 #define SDT_PID (0x11)
@@ -191,7 +191,7 @@ static void init_prog(prog_t *prog)
 #define CONTENT_DESCRIPTOR_TAG                   (0x54)
 #define MULTILINGUAL_SERVICE_NAME_DESCRIPTOR_TAG (0x5D)
 /*
-** TODO: complete this list.
+** TODO: complete this list
 */
 
 typedef struct
@@ -242,12 +242,12 @@ static void init_ait(ait_t *ait)
   ait->id       = 0;
 }
 
-/***************************/
-/*** MACROS&TYPES: TRACE ***/
-/***************************/
+/*************/
+/*** DEBUG ***/
+/*************/
 
 /*
-** TODO: Fix and improve trace handling.
+** TODO: fix and improve trace handling
 */
 
 #define print_error  printf
@@ -255,10 +255,6 @@ static void init_ait(ait_t *ait)
 #define print_debug
 #define print_output printf
 #define print_user   printf
-
-/*************/
-/*** DEBUG ***/
-/*************/
 
 static void dump_buffer(const uint8_t *buffer,
                         unsigned       size,
@@ -291,7 +287,7 @@ static void dump_buffer(const uint8_t *buffer,
 /************/
 
 /*
-** Misc tools.
+** Misc tools
 */
 
 static void write_12bits(uint8_t *stream, uint16_t value)
@@ -311,7 +307,7 @@ static void close_file(FILE *file)
 }
 
 /*
-** Packet level tools.
+** Packet level tools
 */
 
 static bool_t check_crc32(const uint8_t *buffer, unsigned length);
@@ -516,6 +512,7 @@ static bool_t is_pid_in_list(uint16_t       pid,
                              uint32_t       size)
 {
   uint32_t i;
+
   for (i = 0; i < size; i++)
   {
     if (pid == list[i].pid)
@@ -531,6 +528,7 @@ static bool_t is_pid_in_list(uint16_t       pid,
       }
     }
   }
+
   return FALSE;
 }
 
@@ -553,7 +551,7 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
   nb_pids = 1;
 
   /*
-  ** Sort the list in PID order.
+  ** Sort the list in PID order
   */
 
   for (i = 0; i < size; i++)
@@ -580,7 +578,7 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
   }
 
   /*
-  ** Show the list.
+  ** Show the list
   */
 
   print_output("%s: found %lu PIDs\n",
@@ -613,6 +611,7 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
 static uint32_t pcr1_minus_pcr2(const pcr_t *pcr1, const pcr_t *pcr2)
 {
   uint32_t pcr_diff;
+
   if (pcr1->base_1hb == pcr2->base_1hb)
   {
     pcr_diff = pcr1->base_32lb - pcr2->base_32lb;
@@ -621,9 +620,11 @@ static uint32_t pcr1_minus_pcr2(const pcr_t *pcr1, const pcr_t *pcr2)
   {
     pcr_diff = pcr1->base_32lb - (0xFFFFFFFF - pcr2->base_32lb);
   }
+
   /*
-  ** TODO: extension part of PCR.
+  ** TODO: extension part of PCR
   */
+
   return pcr_diff;
 }
 
@@ -676,7 +677,7 @@ static void show_bitrate(uint16_t pid, const packet_time_t *time)
 }
 
 /*
-** Section level tools.
+** Section level tools
 */
 
 static uint32_t crc32_table[256];
@@ -817,7 +818,7 @@ static void increment_version_number(uint8_t *section)
   uint8_t version_number;
 
   /*
-  ** Make sure this function works for PAT & PMT.
+  ** Make sure this function works for PAT & PMT
   */
 
   version_number = (section[5] & 0x3E) >> 1;
@@ -934,7 +935,7 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
 }
 
 /*
-** PAT tools.
+** PAT tools
 */
 
 #define PAT_PROGRAM_SIZE      4
@@ -1157,7 +1158,7 @@ static void show_pat(const pat_header_t *header,
 }
 
 /*
-** PMT tools.
+** PMT tools
 */
 
 #define PMT_MINIMUM_ES_SIZE          5
@@ -1467,7 +1468,7 @@ static void show_pmt(const pmt_header_t *header,
 }
 
 /*
-** SDT tools.
+** SDT tools
 */
 
 #define SDT_MINIMUM_SIZE            (11)
@@ -1676,7 +1677,7 @@ static void show_sdt(const sdt_header_t *header,
 }
 
 /*
-** TODO: extract descriptor functions for code factorization.
+** TODO: extract descriptor functions for code factorization
 */
 
 static bool_t patch_sdt_provider_name(const sdt_header_t *header,
@@ -1706,7 +1707,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
                 - SDT_MINIMUM_SIZE;
 
   /*
-  ** TODO: Improve this section_length update.
+  ** TODO: improve this section_length update
   */
   sl = section + 1;
 
@@ -1766,7 +1767,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
         //dump_buffer(section, TS_PACKET_SIZE - 4, "before length fields patches");
 
         /*
-        ** Update all length fields.
+        ** Update all length fields
         */
         service[1] = strlen(new_svc->name); /* service_provider_name_length */
         if (service_provider_name_length > strlen(new_svc->name))
@@ -1777,7 +1778,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
           *section_length = header->section_length - len_diff;
 
           /*
-          ** New provider name is shorter so need to fill with 0xFF.
+          ** New provider name is shorter so need to fill with 0xFF
           */
           memset(spn + strlen(new_svc->name) + remaining_len + SECTION_CRC_SIZE,
                  0xFF,
@@ -1819,7 +1820,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
 }
 
 /*
-** AIT tools.
+** AIT tools
 */
 
 typedef struct
@@ -1882,7 +1883,7 @@ static bool_t parse_ait(uint8_t     *section,
                         uint16_t    *length)
 {
   /*
-  ** Does not manage the common decriptors loop.
+  ** Does not manage the common decriptors loop
   */
   uint8_t  *s                                            = section;
   uint8_t  *section_length_position                      = NULL;
@@ -2253,7 +2254,7 @@ static bool_t parse_ait(uint8_t     *section,
 }
 
 /*
-** HLS tools.
+** HLS tools
 */
 
 typedef enum
@@ -2621,7 +2622,7 @@ static void parse_ts(const char      *filename,
     if (pid != INVALID_PID)
     {
       /*
-      ** TODO: just one show pid command should be enough.
+      ** TODO: just one show pid command should be enough
       */
 
       if (IS_ACTIVE(command, SHOW_ALL_PID))
@@ -2732,8 +2733,7 @@ static void parse_ts(const char      *filename,
             if (INVALID_PID == temp_pid)
             {
               /*
-              ** Just found the PMT PID:
-              ** may want to patch previous PMTs in file.
+              ** Just found the PMT PID: may want to patch previous PMTs ?
               */
               rewind_file = TRUE;
             }
@@ -2870,12 +2870,12 @@ static void parse_ts(const char      *filename,
     else if (pid == ait->pid &&
              (IS_ACTIVE(command, SHOW_AIT) ||
               IS_ACTIVE(command, REPLACE_AIT_ID) ||
-              IS_ACTIVE(command, REPLACE_AIT_URL))) 
+              IS_ACTIVE(command, REPLACE_AIT_URL)))
     {
       section = get_section(packet, FALSE, FALSE);
       patch_section |= parse_ait(section, ait, &section_length);
     }
-    if (INVALID_PID != pid1 && pid == pid1) 
+    if (INVALID_PID != pid1 && pid == pid1)
     {
       patch_es |= set_pid(packet, pid2);
     }
@@ -2889,7 +2889,7 @@ static void parse_ts(const char      *filename,
       /*
       ** 1- change version
       ** 2- calculate CRC
-      */ 
+      */
 
       increment_version_number(section);
 
@@ -2903,7 +2903,7 @@ static void parse_ts(const char      *filename,
       /*
       ** 3- rewind file for one packet
       ** 4- write packet into file
-      */ 
+      */
 
       ret = fseek(file, -TS_PACKET_SIZE, SEEK_CUR);
       assert(0 == ret);
@@ -3006,7 +3006,7 @@ static uint32_t parse_args(int argc, char **argv,
     command = *argv++;
 
     /*
-    ** Commands that require no argument.
+    ** Commands with no argument
     */
 
     if (IS_COMMAND(command, SHOW_ALL_PID))
@@ -3048,7 +3048,7 @@ static uint32_t parse_args(int argc, char **argv,
     else
     {
       /*
-      ** Commands that do need an argument.
+      ** Commands with 1 argument
       */
 
       value1 = *argv++;
@@ -3124,7 +3124,7 @@ static uint32_t parse_args(int argc, char **argv,
       else
       {
         /*
-        ** Commands that do need 2 arguments.
+        ** Commands with 2 arguments
         */
 
         value2 = *argv++;
@@ -3279,7 +3279,7 @@ static uint32_t parse_args(int argc, char **argv,
     if (*pid1 < INVALID_PID && *pid2 <= INVALID_PID)
     {
       /*
-      ** Second PID accepts invalid value.
+      ** Second PID accepts invalid value
       */
       print_user("  - replace PID %d (0x%X) by %d (0x%X)\n",
                  *pid1, *pid1,
