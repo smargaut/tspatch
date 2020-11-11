@@ -7,6 +7,14 @@
 
 #include <libgen.h> /* for basename */
 
+/*******************/
+/*** COMPILATION ***/
+/*******************/
+
+#if 0
+gcc -m32 tspatch.ts -o tspatch
+#endif
+
 /******************************/
 /*** MACROS & TYPES: C CODE ***/
 /******************************/
@@ -18,8 +26,6 @@ typedef unsigned       bool_t;
 typedef unsigned char  uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned long  uint32_t;
-
-#define LOCAL_FUNCTION static
 
 /*
 ** TODO: complete and use these macros
@@ -45,11 +51,11 @@ typedef unsigned long  uint32_t;
 #define INVALID_PROGRAM_NUMBER      0xFFFF
 #define INVALID_VERSION_NUMBER      0xFF
 
-#define PAT_PID (0x00)
-#define CAT_PID (0x01)
-#define PAT_TID (0x00)
-#define CAT_TID (0x01)
-#define PMT_TID (0x02)
+#define PID_PAT (0x00)
+#define PID_CAT (0x01)
+#define TID_PAT (0x00)
+#define TID_CAT (0x01)
+#define TID_PMT (0x02)
 
 #define SECTION_TABLE_ID_SIZE            1
 #define SECTION_SECTION_LENGTH_SIZE      2
@@ -143,53 +149,53 @@ static void init_prog(prog_t *prog)
 /*** MACROS & TYPES: DVB ***/
 /***************************/
 
-#define NIT_PID (0x10)
-#define SDT_PID (0x11)
-#define BAT_PID (0x11)
-#define EIT_PID (0x12)
-#define RST_PID (0x12)
-#define TDT_PID (0x14)
-#define TOT_PID (0x14)
+#define PID_NIT (0x10)
+#define PID_SDT (0x11)
+#define PID_BAT (0x11)
+#define PID_EIT (0x12)
+#define PID_RST (0x12)
+#define PID_TDT (0x14)
+#define PID_TOT (0x14)
 
-#define NIT_ACTUAL_TID              (0x40)
-#define NIT_OTHER_TID               (0x41)
-#define SDT_ACTUAL_TID              (0x42)
-#define SDT_OTHER_TID               (0x46)
-#define BAT_TID                     (0x4A)
-#define EITPF_ACTUAL_TID            (0x4E)
-#define EITPF_OTHER_TID             (0x4F)
-#define EIT_SCHEDULE_ACTUAL_MIN_TID (0x50)
-#define EIT_SCHEDULE_ACTUAL_MAX_TID (0x5F)
-#define EIT_SCHEDULE_OTHER_MIN_TID  (0x60)
-#define EIT_SCHEDULE_OTHER_MAX_TID  (0x6F)
-#define TDT_TID                     (0x70)
-#define RST_TID                     (0x71)
-#define ST_TID                      (0x72)
-#define TOT_TID                     (0x73)
-#define AIT_TID                     (0x74)
+#define TID_NIT_ACTUAL              (0x40)
+#define TID_NIT_OTHER               (0x41)
+#define TID_SDT_ACTUAL              (0x42)
+#define TID_SDT_OTHER               (0x46)
+#define TID_BAT                     (0x4A)
+#define TID_EITPF_ACTUAL            (0x4E)
+#define TID_EITPF_OTHER             (0x4F)
+#define TID_EIT_SCHEDULE_ACTUAL_MIN (0x50)
+#define TID_EIT_SCHEDULE_ACTUAL_MAX (0x5F)
+#define TID_EIT_SCHEDULE_OTHER_MIN  (0x60)
+#define TID_EIT_SCHEDULE_OTHER_MAX  (0x6F)
+#define TID_TDT                     (0x70)
+#define TID_RST                     (0x71)
+#define TID_ST                      (0x72)
+#define TID_TOT                     (0x73)
+#define TID_AIT                     (0x74)
 
-#define NETWORK_NAME_DESCRIPTOR_TAG              (0x40)
-#define SERVICE_LIST_DESCRIPTOR_TAG              (0x41)
-#define STUFFING_DESCRIPTOR_TAG                  (0x42)
-#define SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR_TAG (0x43)
-#define CABLE_DELIVERY_SYSTEM_DESCRIPTOR_TAG     (0x44)
-#define VBI_DATA_DESCRIPTOR_TAG                  (0x45)
-#define VBI_TELETEXT_DESCRIPTOR_TAG              (0x46)
-#define BOUQUET_NAME_DESCRIPTOR_TAG              (0x47)
-#define SERVICE_DESCRIPTOR_TAG                   (0x48)
-#define COUNTRY_AVAILABILITY_DESCRIPTOR_TAG      (0x49)
-#define LINKAGE_DESCRIPTOR_TAG                   (0x4A)
-#define NVOD_REFERENCE_DESCRIPTOR_TAG            (0x4B)
-#define TIME_SHIFTED_SERVICE_DESCRIPTOR_TAG      (0x4C)
-#define SHORT_EVENT_DESCRIPTOR_TAG               (0x4D)
-#define EXTENDED_EVENT_DESCRIPTOR_TAG            (0x4E)
-#define TIME_SHIFTED_EVENT_DESCRIPTOR_TAG        (0x4F)
-#define COMPONENT_DESCRIPTOR_TAG                 (0x50)
-#define MOSAIC_DESCRIPTOR_TAG                    (0x51)
-#define STREAM_IDENTIFIER_DESCRIPTOR_TAG         (0x52)
-#define CA_IDENTIFIER_DESCRIPTOR_TAG             (0x53)
-#define CONTENT_DESCRIPTOR_TAG                   (0x54)
-#define MULTILINGUAL_SERVICE_NAME_DESCRIPTOR_TAG (0x5D)
+#define TAG_NETWORK_NAME_DESCRIPTOR              (0x40)
+#define TAG_SERVICE_LIST_DESCRIPTOR              (0x41)
+#define TAG_STUFFING_DESCRIPTOR                  (0x42)
+#define TAG_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR (0x43)
+#define TAG_CABLE_DELIVERY_SYSTEM_DESCRIPTOR     (0x44)
+#define TAG_VBI_DATA_DESCRIPTOR                  (0x45)
+#define TAG_VBI_TELETEXT_DESCRIPTOR              (0x46)
+#define TAG_BOUQUET_NAME_DESCRIPTOR              (0x47)
+#define TAG_SERVICE_DESCRIPTOR                   (0x48)
+#define TAG_COUNTRY_AVAILABILITY_DESCRIPTOR      (0x49)
+#define TAG_LINKAGE_DESCRIPTOR                   (0x4A)
+#define TAG_NVOD_REFERENCE_DESCRIPTOR            (0x4B)
+#define TAG_TIME_SHIFTED_SERVICE_DESCRIPTOR      (0x4C)
+#define TAG_SHORT_EVENT_DESCRIPTOR               (0x4D)
+#define TAG_EXTENDED_EVENT_DESCRIPTOR            (0x4E)
+#define TAG_TIME_SHIFTED_EVENT_DESCRIPTOR        (0x4F)
+#define TAG_COMPONENT_DESCRIPTOR                 (0x50)
+#define TAG_MOSAIC_DESCRIPTOR                    (0x51)
+#define TAG_STREAM_IDENTIFIER_DESCRIPTOR         (0x52)
+#define TAG_CA_IDENTIFIER_DESCRIPTOR             (0x53)
+#define TAG_CONTENT_DESCRIPTOR                   (0x54)
+#define TAG_MULTILINGUAL_SERVICE_NAME_DESCRIPTOR (0x5D)
 /*
 ** TODO: complete this list
 */
@@ -247,7 +253,7 @@ static void init_ait(ait_t *ait)
 /*************/
 
 /*
-** TODO: fix and improve trace handling
+** TODO: review, fix and improve trace handling (this is very artisanal)
 */
 
 #define print_error  printf
@@ -270,7 +276,7 @@ static void dump_buffer(const uint8_t *buffer,
   print_output("\n");
   for (i = 0; i < size; i++)
   {
-    if (20 <= buffer[i] && buffer[i] <= 255)
+    if (0x20 <= buffer[i] && buffer[i] < 0x76)
     {
       print_output("%c", buffer[i]);
     }
@@ -496,7 +502,12 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
   section_length += SECTION_HEADER_SIZE;
   section_length -= SECTION_CRC_SIZE;
 
-  if (! check_crc32(packet, (unsigned)section_length))
+  if (pid == PID_TDT && packet[0] == TID_TDT)
+  {
+    print_debug("%s: TDT section has no CRC\n",
+                __FUNCTION__);
+  }
+  else if (! check_crc32(packet, (unsigned)section_length))
   {
     print_error("%s: CRC error on TID %d (0x%02X)\n",
                 __FUNCTION__, packet[0], packet[0]);
@@ -733,7 +744,7 @@ static void init_crc(void)
 {
   uint32_t i, j, k;
 
-  for( i = 0; i < 256; i++ )
+  for (i = 0; i < 256; i++)
   {
     k = 0;
     for (j = (i << 24) | 0x800000; j != 0x80000000; j <<= 1)
@@ -744,7 +755,8 @@ static void init_crc(void)
     crc32_table[i] = k;
   }
 
-  print_debug("compare crc32 tables : %d\n",
+  print_debug("%s: compare crc32 tables : %d\n",
+              __FUNCTION__,
               memcmp(crc32_table, const_crc32_table, sizeof (crc32_table)));
 }
 
@@ -793,7 +805,9 @@ static bool_t check_crc32(const uint8_t *buffer, unsigned length)
            | ((uint32_t)buffer[length + 2]) <<  8
            | ((uint32_t)buffer[length + 3]) <<  0;
 
-  print_debug("read CRC 0x%X and found 0x%X\n", read_crc, found_crc);
+  print_debug("%s: read CRC 0x%X and found 0x%X\n",
+              __FUNCTION__,
+               read_crc, found_crc);
 
   return read_crc == found_crc;
 }
@@ -810,7 +824,8 @@ static void update_crc32(uint8_t *buffer, unsigned length)
   buffer[length + 3] = (uint8_t)((crc >>  0) & 0xFF);
 
   print_debug("%s: update crc32 0x%08lX\n",
-              __FUNCTION__, crc);
+              __FUNCTION__,
+              crc);
 }
 
 static void increment_version_number(uint8_t *section)
@@ -836,75 +851,75 @@ static void increment_version_number(uint8_t *section)
 
 static const char *get_section_name(uint16_t pid, uint8_t table_id)
 {
-  if (PAT_PID == pid && PAT_TID == table_id)
+  if (PID_PAT == pid && TID_PAT == table_id)
   {
     return "PAT";
   }
 
-  if (CAT_PID == pid && CAT_TID == table_id)
+  if (PID_CAT == pid && TID_CAT == table_id)
   {
     return "CAT";
   }
 
-  if (NIT_PID == pid && NIT_ACTUAL_TID == table_id)
+  if (PID_NIT == pid && TID_NIT_ACTUAL == table_id)
   {
     return "NIT ACTUAL";
   }
 
-  if (NIT_PID == pid && NIT_OTHER_TID == table_id)
+  if (PID_NIT == pid && TID_NIT_OTHER == table_id)
   {
     return "NIT OTHER";
   }
 
-  if (SDT_PID == pid && (SDT_ACTUAL_TID == table_id || SDT_OTHER_TID == table_id))
+  if (PID_SDT == pid && (TID_SDT_ACTUAL == table_id || TID_SDT_OTHER == table_id))
   {
     return "SDT";
   }
 
-  if (BAT_PID == pid && BAT_TID == table_id)
+  if (PID_BAT == pid && TID_BAT == table_id)
   {
     return "BAT";
   }
 
-  if (EIT_PID == pid && (EITPF_ACTUAL_TID == table_id || EITPF_OTHER_TID == table_id))
+  if (PID_EIT == pid && (TID_EITPF_ACTUAL == table_id || TID_EITPF_OTHER == table_id))
   {
     return "EITPF";
   }
 
-  if (EIT_PID == pid
-      && (EIT_SCHEDULE_ACTUAL_MIN_TID <= table_id && table_id <= EIT_SCHEDULE_ACTUAL_MAX_TID))
+  if (PID_EIT == pid
+      && (TID_EIT_SCHEDULE_ACTUAL_MIN <= table_id && table_id <= TID_EIT_SCHEDULE_ACTUAL_MAX))
   {
     return "EIT SCHEDULE ACTUAL";
   }
 
-  if (EIT_PID == pid
-      && (EIT_SCHEDULE_OTHER_MIN_TID <= table_id && table_id <= EIT_SCHEDULE_OTHER_MAX_TID))
+  if (PID_EIT == pid
+      && (TID_EIT_SCHEDULE_OTHER_MIN <= table_id && table_id <= TID_EIT_SCHEDULE_OTHER_MAX))
   {
     return "EIT SCHEDULE OTHER";
   }
 
-  if (RST_PID == pid && RST_TID == table_id)
+  if (PID_RST == pid && TID_RST == table_id)
   {
     return "RST";
   }
 
-  if (TDT_PID == pid && TDT_TID == table_id)
+  if (PID_TDT == pid && TID_TDT == table_id)
   {
     return "TDT";
   }
 
-  if (TOT_PID == pid && TOT_TID == table_id)
+  if (PID_TOT == pid && TID_TOT == table_id)
   {
     return "TOT";
   }
 
-  if ((NIT_PID == pid || SDT_PID == pid || EIT_PID == pid || RST_PID == pid || TDT_PID == pid)
-      && ST_TID == table_id)
+  if ((PID_NIT == pid || PID_SDT == pid || PID_EIT == pid || PID_RST == pid || PID_TDT == pid)
+      && TID_ST == table_id)
   {
     return "STUFFING";
   }
 
-  if (PMT_TID == table_id)
+  if (TID_PMT == table_id)
   {
     return "PMT";
   }
@@ -918,16 +933,16 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
 
   switch (descriptor_tag)
   {
-  case NETWORK_NAME_DESCRIPTOR_TAG:              name = "NETWORK_NAME";              break;
-  case SERVICE_LIST_DESCRIPTOR_TAG:              name = "SERVICE_LIST";              break;
-  case STUFFING_DESCRIPTOR_TAG:                  name = "STUFFING";                  break;
-  case SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR_TAG: name = "SATELLITE_DELIVERY_SYSTEM"; break;
-  case CABLE_DELIVERY_SYSTEM_DESCRIPTOR_TAG:     name = "CABLE_DELIVERY_SYSTEM";     break;
-  case VBI_DATA_DESCRIPTOR_TAG:                  name = "VBI_DATA";                  break;
-  case VBI_TELETEXT_DESCRIPTOR_TAG:              name = "VBI_TELETEXT";              break;
-  case BOUQUET_NAME_DESCRIPTOR_TAG:              name = "BOUQUET_NAME";              break;
-  case SERVICE_DESCRIPTOR_TAG:                   name = "SERVICE";                   break;
-  case MULTILINGUAL_SERVICE_NAME_DESCRIPTOR_TAG: name = "MULTILINGUAL_SERVICE_NAME"; break;
+  case TAG_NETWORK_NAME_DESCRIPTOR:              name = "NETWORK_NAME";              break;
+  case TAG_SERVICE_LIST_DESCRIPTOR:              name = "SERVICE_LIST";              break;
+  case TAG_STUFFING_DESCRIPTOR:                  name = "STUFFING";                  break;
+  case TAG_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR: name = "SATELLITE_DELIVERY_SYSTEM"; break;
+  case TAG_CABLE_DELIVERY_SYSTEM_DESCRIPTOR:     name = "CABLE_DELIVERY_SYSTEM";     break;
+  case TAG_VBI_DATA_DESCRIPTOR:                  name = "VBI_DATA";                  break;
+  case TAG_VBI_TELETEXT_DESCRIPTOR:              name = "VBI_TELETEXT";              break;
+  case TAG_BOUQUET_NAME_DESCRIPTOR:              name = "BOUQUET_NAME";              break;
+  case TAG_SERVICE_DESCRIPTOR:                   name = "SERVICE";                   break;
+  case TAG_MULTILINGUAL_SERVICE_NAME_DESCRIPTOR: name = "MULTILINGUAL_SERVICE_NAME"; break;
   default:                                       name = "UNKNOWN";                   break;
   }
 
@@ -960,7 +975,7 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
 static const uint8_t *get_pat_payload(const uint8_t *section,
                                       pat_header_t  *header)
 {
-  if (PAT_TID != section[0])
+  if (TID_PAT != section[0])
   {
     print_error("%s: not a PAT, TID=%d (0x%02X)\n",
                 __FUNCTION__,
@@ -1265,7 +1280,7 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
   uint8_t  *first_es;
   uint16_t  es_info_length;
 
-  if (PMT_TID != section[0])
+  if (TID_PMT != section[0])
   {
     print_error("%s: not a PMT, TID=0x%02X\n",
                 __FUNCTION__,
@@ -1518,8 +1533,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
   uint16_t descriptors_loop_length = 0;
   unsigned i;
 
-  if (SDT_ACTUAL_TID != section[0])
-  //if (SDT_ACTUAL_TID != section[0] && SDT_OTHER_TID != section[0])
+  if (TID_SDT_ACTUAL != section[0])
+  //if (TID_SDT_ACTUAL != section[0] && TID_SDT_OTHER != section[0])
   {
     print_error("%s: not a SDT, TID=%d (0x%02X)\n",
                 __FUNCTION__,
@@ -1638,7 +1653,7 @@ static void show_sdt(const sdt_header_t *header,
 
       service += SDT_DESCRIPTOR_MINIMUM_SIZE;
 
-      if (SERVICE_DESCRIPTOR_TAG == descriptor_tag)
+      if (TAG_SERVICE_DESCRIPTOR == descriptor_tag)
       {
         service_type = service[0];
         service_provider_name_length = service[1];
@@ -1656,7 +1671,7 @@ static void show_sdt(const sdt_header_t *header,
         print_output("          %s\n",
                      name);
       }
-      else if (MULTILINGUAL_SERVICE_NAME_DESCRIPTOR_TAG == descriptor_tag)
+      else if (TAG_MULTILINGUAL_SERVICE_NAME_DESCRIPTOR == descriptor_tag)
       {
       }
 
@@ -1740,7 +1755,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
       service += SDT_DESCRIPTOR_MINIMUM_SIZE;
       remaining_len -= SDT_DESCRIPTOR_MINIMUM_SIZE;
 
-      if (SERVICE_DESCRIPTOR_TAG == descriptor_tag)
+      if (TAG_SERVICE_DESCRIPTOR == descriptor_tag)
       {
         service_provider_name_length = service[1];
         remaining_len -= 2;
@@ -1817,6 +1832,116 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
   }
 
   return FALSE;
+}
+
+/*
+** TDT/TOT tools
+*/
+
+typedef struct
+{
+  uint16_t year;   /* up to 20XX */
+  uint16_t month;  /* 1 to 12 */
+  uint8_t  day;    /* 1 to 31 */
+  uint8_t  hour;   /* 0 to 23 */
+  uint8_t  minute; /* 0 to 59 */
+  uint8_t  second; /* 0 to 59 */
+  uint8_t  offset;
+
+} date_time_t;
+
+static void init_date_time(date_time_t *time)
+{
+  time->year = 2020;
+  time->month = 11;
+  time->day = 11;
+  time->hour = 14;
+  time->minute = 12;
+  time->second = 0;
+  time->offset = 0;
+
+  /* Should init with 'now' time ? */
+}
+
+#define GET_DECIMAL_FROM_BCD(x) (((x) >> 4) * 10 + (x) % 16)
+#define GET_BCD_FROM_DECIMAL(x) (((x) / 10 << 4) + (x) % 10)
+
+static bool_t get_utc_time(const uint8_t *section,
+                           date_time_t   *utc_time,
+                           uint16_t      *section_length)
+{
+  uint32_t mjd;
+  uint32_t year;
+  uint32_t month;
+  uint32_t day;
+  uint32_t K;
+
+  uint8_t  table_id;
+
+  table_id = section[0];
+
+  *section_length = READ_12BITS(&section[1]);
+
+  print_debug("%s: UTC time = %02X%02X%02X%02X%02X\n",
+              __FUNCTION__,
+              section[3], section[4], section[5], section[6], section[7]);
+
+  mjd = READ_16BITS(&section[3]);
+  year = ((double)mjd - 15078.2) / 365.25;
+  month = ((double)mjd - 14956.1 - (double)year * 365.25) / 30.6001;
+  day = mjd - 14956 - (double)year * 365.25 - (double)month * 30.6001;
+  K = month == 14 || month == 15 ? 1 : 0;
+
+  utc_time->year = year + K + 1900;
+  utc_time->month = month - 1 - K * 12;
+  utc_time->day = day;
+  utc_time->hour = GET_DECIMAL_FROM_BCD(section[5]);
+  utc_time->minute = GET_DECIMAL_FROM_BCD(section[6]);
+  utc_time->second = GET_DECIMAL_FROM_BCD(section[7]);
+  utc_time->offset = table_id == TID_TOT ? 1 : 0;
+
+  return TRUE;
+}
+
+static void show_time(const date_time_t *time)
+{
+  print_output("*** %02d/%02d/%04d-%02d:%02d:%02d %s\n",
+               time->day,
+               time->month,
+               time->year,
+               time->hour,
+               time->minute,
+               time->second,
+               time->offset ? "(+o)" : "");
+}
+
+static bool_t patch_utc_time(uint8_t           *section,
+                             const date_time_t *old_time,
+                             const date_time_t *new_time)
+{
+  uint32_t mjd;
+  uint32_t L;
+
+  print_output("*** change %02d/%02d/%04d-%02d:%02d:%02d to %02d/%02d/%04d-%02d:%02d:%02d\n",
+               old_time->day, old_time->month, old_time->year, old_time->hour, old_time->minute, old_time->second,
+               new_time->day, new_time->month, new_time->year, new_time->hour, new_time->minute, new_time->second);
+
+  L = new_time->month == 1 || new_time->month == 2 ? 1 : 0;
+  mjd = 14956 + new_time->day
+      + (uint32_t)((double)(new_time->year - L - 1900) * 365.25)
+      + (uint32_t)((double)(new_time->month + 1 + L * 12) * 30.6001);
+
+  section[3] = (mjd >> 8) & 0x00FF;
+  section[4] = (mjd >> 0) & 0x00FF;
+  section[5] = GET_BCD_FROM_DECIMAL(new_time->hour);
+  section[6] = GET_BCD_FROM_DECIMAL(new_time->minute);
+  section[7] = GET_BCD_FROM_DECIMAL(new_time->second);
+
+  print_debug("%s: new UTC time = %02X%02X%02X%02X%02X\n",
+              __FUNCTION__,
+              section[3], section[4], section[5], section[6], section[7]);
+
+  return TRUE;
 }
 
 /*
@@ -1935,9 +2060,9 @@ static bool_t parse_ait(uint8_t     *section,
 
   print_output("\nAIT\n");
   print_output("table_id: %d (0x%02X)\n", table_id, table_id);
-  if (AIT_TID != table_id)
+  if (TID_AIT != table_id)
   {
-    print_output("table_id WARNING: different from 0x%02X\n", AIT_TID);
+    print_output("table_id WARNING: different from 0x%02X\n", TID_AIT);
   }
   print_output("section_length: %d (0x%02X)\n", section_length, section_length);
   print_output("application_type: %d (0x%02X)\n", application_type, application_type);
@@ -2436,6 +2561,7 @@ typedef enum
   SHOW_SDT,
   SHOW_AIT,
   SHOW_PID,
+  SHOW_TIME,
   SHOW_BR,
   SELECT_PROGRAM_NUMBER,
   SELECT_AUDIO_PID,
@@ -2448,6 +2574,7 @@ typedef enum
   REPLACE_VIDEO_PID,
   REPLACE_PID,
   REPLACE_PROVIDER_NAME,
+  REPLACE_TIME,
   REPLACE_AIT_ID,
   REPLACE_AIT_URL,
   TOGGLE_TSC,
@@ -2467,6 +2594,7 @@ static const char *command_string[NB_COMMANDS] =
   "-show-sdt",
   "-show-ait",
   "-show-pid",
+  "-show-time",
   "-show-br",
   "-pn",
   "-aud",
@@ -2479,6 +2607,7 @@ static const char *command_string[NB_COMMANDS] =
   "-rep-vid",
   "-rep-pid",
   "-rep-provider",
+  "-rep-time",
   "-rep-ait-id",
   "-rep-ait-url",
   "-toggle-tsc",
@@ -2501,6 +2630,7 @@ typedef enum
   DECLARE_COMMAND_MASK(SHOW_SDT),
   DECLARE_COMMAND_MASK(SHOW_AIT),
   DECLARE_COMMAND_MASK(SHOW_PID),
+  DECLARE_COMMAND_MASK(SHOW_TIME),
   DECLARE_COMMAND_MASK(SHOW_BR),
   DECLARE_COMMAND_MASK(SELECT_PROGRAM_NUMBER),
   DECLARE_COMMAND_MASK(SELECT_AUDIO_PID),
@@ -2513,6 +2643,7 @@ typedef enum
   DECLARE_COMMAND_MASK(REPLACE_VIDEO_PID),
   DECLARE_COMMAND_MASK(REPLACE_PID),
   DECLARE_COMMAND_MASK(REPLACE_PROVIDER_NAME),
+  DECLARE_COMMAND_MASK(REPLACE_TIME),
   DECLARE_COMMAND_MASK(REPLACE_AIT_ID),
   DECLARE_COMMAND_MASK(REPLACE_AIT_URL),
   DECLARE_COMMAND_MASK(TOGGLE_TSC),
@@ -2545,16 +2676,17 @@ static bool_t goto_first_packet(FILE *file)
   return FALSE;
 }
 
-static void parse_ts(const char      *filename,
-                     FILE            *file,
-                     uint32_t         command,
-                     prog_t          *target_prog,
-                     const prog_t    *new_prog,
-                     const service_t *service,
-                     const ait_t     *ait,
-                     uint16_t         pid1,
-                     uint16_t         pid2,
-                     uint16_t         tsc_pid)
+static void parse_ts(const char        *filename,
+                     FILE              *file,
+                     uint32_t           command,
+                     prog_t            *target_prog,
+                     const prog_t      *new_prog,
+                     const service_t   *service,
+                     const ait_t       *ait,
+                     const date_time_t *start_time,
+                     uint16_t           pid1,
+                     uint16_t           pid2,
+                     uint16_t           tsc_pid)
 {
   int       ret;
   static
@@ -2570,9 +2702,8 @@ static void parse_ts(const char      *filename,
   uint16_t  section_length;
   uint32_t  nb_packets;
   size_t    nb_bytes;
+  uint8_t   patch_level;
   bool_t    rewind_file;
-  bool_t    patch_section;
-  bool_t    patch_es;
 
   uint32_t      pid_info_list_size;
   packet_info_t pid_info_list[128];
@@ -2581,6 +2712,11 @@ static void parse_ts(const char      *filename,
   sdt_header_t  sdt_header;
   packet_time_t packet_time;
   prog_t        first_prog;
+  date_time_t   prev_utc_time;
+  date_time_t   utc_time;
+  date_time_t   next_time;
+
+  prev_utc_time.offset = 0xFF; /* meaning previous time is unknown */
 
   init_prog(&first_prog);
 
@@ -2602,9 +2738,8 @@ static void parse_ts(const char      *filename,
 
   while (0 == feof(file))
   {
+    patch_level = 0;
     rewind_file = FALSE;
-    patch_section = FALSE;
-    patch_es = FALSE;
 
     nb_bytes = fread(packet, 1, TS_PACKET_SIZE, file);
     if (TS_PACKET_SIZE != nb_bytes)
@@ -2656,7 +2791,7 @@ static void parse_ts(const char      *filename,
           }
           else
           {
-            print_error("%s: pid array of %d elements is too small\n",
+            print_error("%s: pid array of %u elements is too small\n",
                         __FUNCTION__,
                         sizeof (pid_info_list) / sizeof (pid_info_list[0]));
           }
@@ -2685,7 +2820,7 @@ static void parse_ts(const char      *filename,
       print_debug("%s: packet not identified or stuffing\n",
                   __FUNCTION__);
     }
-    else if (pid == PAT_PID)
+    else if (pid == PID_PAT)
     {
       section = get_section(packet, FALSE, FALSE);
       if (NULL != section)
@@ -2722,10 +2857,7 @@ static void parse_ts(const char      *filename,
 
           if (IS_ACTIVE(command, REPLACE_TRANSPORT_STREAM_ID))
           {
-            patch_section |= patch_pat_header(&pat_header,
-                                              target_prog,
-                                              new_prog,
-                                              section);
+            patch_level |= patch_pat_header(&pat_header, target_prog, new_prog, section) ? 7 : 0;
           }
 
           if (INVALID_PID != target_prog->pmt_pid)
@@ -2745,10 +2877,7 @@ static void parse_ts(const char      *filename,
             if (IS_ACTIVE(command, REPLACE_PROGRAM_NUMBER) ||
                 IS_ACTIVE(command, REPLACE_PMT_PID))
             {
-              patch_section |= patch_pat_program(&pat_header,
-                                                 target_prog,
-                                                 new_prog,
-                                                 (uint8_t*)payload);
+              patch_level |= patch_pat_program(&pat_header, target_prog, new_prog, (uint8_t*)payload) ? 7 : 0;
             }
           }
         }
@@ -2797,20 +2926,14 @@ static void parse_ts(const char      *filename,
 
             if (IS_ACTIVE(command, REPLACE_PROGRAM_NUMBER))
             {
-              patch_section |= patch_pmt_header(&pmt_header,
-                                                target_prog,
-                                                new_prog,
-                                                (uint8_t*)section);
+              patch_level |= patch_pmt_header(&pmt_header, target_prog, new_prog, (uint8_t*)section) ? 7 : 0;
             }
 
             if (IS_ACTIVE(command, REPLACE_PCR_PID) ||
                 IS_ACTIVE(command, REPLACE_AUDIO_PID) ||
                 IS_ACTIVE(command, REPLACE_VIDEO_PID))
             {
-              patch_section |= patch_pmt_es(&pmt_header,
-                                            target_prog,
-                                            new_prog,
-                                            (uint8_t*)payload);
+              patch_level |= patch_pmt_es(&pmt_header, target_prog, new_prog, (uint8_t*)payload) ? 7 : 0;
             }
           }
         }
@@ -2818,10 +2941,10 @@ static void parse_ts(const char      *filename,
 
       if (IS_ACTIVE(command, REPLACE_PMT_PID))
       {
-        patch_es |= set_pid(packet, new_prog->pmt_pid);
+        patch_level |= set_pid(packet, new_prog->pmt_pid) ? 1 : 0;
       }
     }
-    else if (pid == SDT_PID)
+    else if (pid == PID_SDT)
     {
       section = get_section(packet, FALSE, FALSE);
       if (NULL != section)
@@ -2841,10 +2964,42 @@ static void parse_ts(const char      *filename,
 
           if (IS_ACTIVE(command, REPLACE_PROVIDER_NAME))
           {
-            patch_section |= patch_sdt_provider_name(&sdt_header,
-                                                     service,
-                                                     section,
-                                                     &section_length);
+            patch_level |= patch_sdt_provider_name(&sdt_header, service, section, &section_length) ? 7 : 0;
+          }
+        }
+      }
+    }
+    else if (pid == PID_TDT || pid == PID_TOT)
+    {
+      section = get_section(packet, FALSE, FALSE);
+      if (NULL != section)
+      {
+        if (get_utc_time(section, &utc_time, &section_length))
+        {
+          if (IS_ACTIVE(command, REPLACE_TIME))
+          {
+#if 0 // TODO: want to achieve this
+            if (prev_utc_time.offset == 0xFF)
+            {
+              /* First TOT/TDT */
+              next_time = *start_time;
+            }
+	    else
+            {
+              next_time += utc_time - prev_utc_time;
+            }
+#else // ... but meanwhile, only patch the year (a lot easier)
+            next_time = utc_time;
+            next_time.year = start_time->year;
+#endif
+
+            patch_level |= patch_utc_time(section, &utc_time, &next_time) ? utc_time.offset == 0 ? 1 : 3 : 0;
+
+            prev_utc_time = utc_time;
+          }
+	  else if (IS_ACTIVE(command, SHOW_TIME))
+          {
+            show_time(&utc_time);
           }
         }
       }
@@ -2852,17 +3007,17 @@ static void parse_ts(const char      *filename,
     else if (pid == target_prog->pcr_pid &&
              IS_ACTIVE(command, REPLACE_PCR_PID))
     {
-      patch_es |= set_pid(packet, new_prog->pcr_pid);
+      patch_level |= set_pid(packet, new_prog->pcr_pid) ? 1 : 0;
     }
     else if (pid == target_prog->audio_pid &&
              IS_ACTIVE(command, REPLACE_AUDIO_PID))
     {
-      patch_es |= set_pid(packet, new_prog->audio_pid);
+      patch_level |= set_pid(packet, new_prog->audio_pid) ? 1 : 0;
     }
     else if (pid == target_prog->video_pid &&
              IS_ACTIVE(command, REPLACE_VIDEO_PID))
     {
-      patch_es |= set_pid(packet, new_prog->video_pid);
+      patch_level |= set_pid(packet, new_prog->video_pid) ? 1 : 0;
     }
     /*
     ** Hard-code AIT.
@@ -2873,36 +3028,41 @@ static void parse_ts(const char      *filename,
               IS_ACTIVE(command, REPLACE_AIT_URL)))
     {
       section = get_section(packet, FALSE, FALSE);
-      patch_section |= parse_ait(section, ait, &section_length);
+      patch_level |= parse_ait(section, ait, &section_length) ? 7 : 0;
     }
     if (INVALID_PID != pid1 && pid == pid1)
     {
-      patch_es |= set_pid(packet, pid2);
+      patch_level |= set_pid(packet, pid2) ? 1 : 0;
     }
     if (pid == tsc_pid && IS_ACTIVE(command, TOGGLE_TSC))
     {
-      patch_es |= toggle_tsc_bits(packet);
+      patch_level |= toggle_tsc_bits(packet) ? 1 : 0;
     }
 
-    if (patch_section)
+    if ((patch_level & 4) != 0)
     {
       /*
-      ** 1- change version
-      ** 2- calculate CRC
+      ** Change section version number
       */
-
       increment_version_number(section);
+    }
 
+    if ((patch_level & 2) != 0)
+    {
+      /*
+      ** Update CRC
+      */
       section_length += SECTION_HEADER_SIZE;
       section_length -= SECTION_CRC_SIZE;
+      //dump_buffer(section, section_length + SECTION_CRC_SIZE, "before CRC update");
       update_crc32(section, section_length);
+      //dump_buffer(section, section_length + SECTION_CRC_SIZE, "after CRC update");
     }
 
-    if (patch_section || patch_es)
+    if ((patch_level & 1) != 0)
     {
       /*
-      ** 3- rewind file for one packet
-      ** 4- write packet into file
+      ** Rewind file for one TS packet & Write back packet into file
       */
 
       ret = fseek(file, -TS_PACKET_SIZE, SEEK_CUR);
@@ -2917,7 +3077,7 @@ static void parse_ts(const char      *filename,
     {
       proceed_hls(filename, HLS_STREAM, packet);
     }
-  }
+  } /* loop */
 
   if (IS_ACTIVE(command, HLS))
   {
@@ -2952,6 +3112,7 @@ static void show_usage(const char *name)
   print_user("    -vid <pid>         select a video PID\n");
   print_user("\n");
   print_user("    display commands\n");  
+  print_user("    -show-time         display stream date and time\n");
   print_user("    -show-br           display instant and average bitrates\n");
   print_user("    -show-pat          display the PAT\n");
   print_user("    -show-pmt          display the PMT of selected program\n");
@@ -2973,6 +3134,8 @@ static void show_usage(const char *name)
   print_user("                       found in selected program PMT by new one\n");
   print_user("    -rep-pid <p1> <p2> replace first PID by second one\n");
   print_user("    -rep-provider <provider name>\n");
+  // TODO: allow complete date & time replacement
+  print_user("    -rep-time <new-time> where new-time can be either either the 'now' magic word or a year number\n");
   print_user("\n");
   print_user("    special AIT\n");  
   print_user("    -rep-ait-id <app_id>\n");
@@ -2985,13 +3148,14 @@ static void show_usage(const char *name)
 }
 
 static uint32_t parse_args(int argc, char **argv,
-                           prog_t    *sel_prog,
-                           prog_t    *rep_prog,
-                           service_t *service,
-                           ait_t     *rep_ait,
-                           uint16_t  *pid1,
-                           uint16_t  *pid2,
-                           uint16_t  *tsc_pid)
+                           prog_t      *sel_prog,
+                           prog_t      *rep_prog,
+                           service_t   *service,
+                           ait_t       *rep_ait,
+                           date_time_t *rep_time,
+                           uint16_t    *pid1,
+                           uint16_t    *pid2,
+                           uint16_t    *tsc_pid)
 {
   char     *command;
   char     *value1;
@@ -3041,6 +3205,10 @@ static uint32_t parse_args(int argc, char **argv,
     { 
       user_command |= COMMAND_MASK_SHOW_PID;
     }
+    else if (IS_COMMAND(command, SHOW_TIME))
+    { 
+      user_command |= COMMAND_MASK_SHOW_TIME;
+    }
     else if (IS_COMMAND(command, SHOW_BR))
     { 
       user_command |= COMMAND_MASK_SHOW_BR;
@@ -3053,6 +3221,12 @@ static uint32_t parse_args(int argc, char **argv,
 
       value1 = *argv++;
       i++;
+
+      if (value1 == NULL)
+      {
+        print_error("argument missing after %s !", command);
+        exit(0);
+      }
 
       if (IS_COMMAND(command, SELECT_PROGRAM_NUMBER))
       {
@@ -3106,6 +3280,20 @@ static uint32_t parse_args(int argc, char **argv,
         strncpy(service->name, value1, sizeof (service->name) - 1);
         user_command |= COMMAND_MASK_REPLACE_PROVIDER_NAME;
       }
+      else if (IS_COMMAND(command, REPLACE_TIME))
+      {
+        if (0 == strncmp("now", value1, strlen("now")))
+        {
+          rep_time->year = 2020;
+          /* TODO: implement the real 'now' */
+        }
+        else
+        {
+          rep_time->year = atoi(value1);
+          /* TODO: allow complete date & time replacement */
+        }
+        user_command |= COMMAND_MASK_REPLACE_TIME;
+      }
       else if (IS_COMMAND(command, SHOW_AIT))
       {
         rep_ait->pid = atoi(value1);
@@ -3149,6 +3337,8 @@ static uint32_t parse_args(int argc, char **argv,
       }
     }
   }
+
+  /* Summary of options after parsing is done */
 
   if (INVALID_TRANSPORT_STREAM_ID == rep_prog->tsid)
   {
@@ -3303,7 +3493,7 @@ static uint32_t parse_args(int argc, char **argv,
     }
     else
     {
-      print_user("  - need to select an AIT PID to replace the ID, abort replacing command\n");
+      print_user("  - need to select an AIT PID to replace the ID, abort replacement command\n");
       init_ait(rep_ait);
       user_command &= ~COMMAND_MASK_REPLACE_AIT_ID;
     }
@@ -3318,10 +3508,21 @@ static uint32_t parse_args(int argc, char **argv,
     }
     else
     {
-      print_user("  - need to select an AIT PID to replace the URL, abort replacing command\n");
+      print_user("  - need to select an AIT PID to replace the URL, abort replacement command\n");
       init_ait(rep_ait);
       user_command &= ~COMMAND_MASK_REPLACE_AIT_URL;
     }
+  }
+
+  if (0 != (user_command & COMMAND_MASK_REPLACE_TIME))
+  {
+    print_user("  - replace stream time by %02d/%02d/%04d-%02d:%02d:%02d\n",
+               rep_time->day,
+               rep_time->month,
+               rep_time->year,
+               rep_time->hour,
+               rep_time->minute,
+               rep_time->second);
   }
 
   if (INVALID_PID != *tsc_pid)
@@ -3341,28 +3542,30 @@ static uint32_t parse_args(int argc, char **argv,
 
 int main(int argc, char **argv)
 {
-  FILE     *file;
-  char     *toolname;
-  char     *filename;
-  uint32_t  user_command;
-  prog_t    selected_prog;
-  prog_t    replacing_prog;
-  service_t service;
-  ait_t     ait;
-  uint16_t  pid1;
-  uint16_t  pid2;
-  uint16_t  tsc_pid;
+  FILE       *file;
+  char       *toolname;
+  char       *filename;
+  uint32_t    user_command;
+  prog_t      selected_prog;
+  prog_t      replacing_prog;
+  service_t   service;
+  ait_t       ait;
+  date_time_t new_time;
+  uint16_t    pid1;
+  uint16_t    pid2;
+  uint16_t    tsc_pid;
 
   init_prog(&selected_prog);
   init_prog(&replacing_prog);
   init_service(&service);
   init_ait(&ait);
+  init_date_time(&new_time);
   pid1    = INVALID_PID;
   pid2    = INVALID_PID;
   tsc_pid = INVALID_PID;
 
   /*
-  ** TODO: process directory in addition of file
+  ** TODO: allow directory processing in addition of file processing
   */
 
 //  toolname = basename(*argv++);
@@ -3384,6 +3587,7 @@ int main(int argc, char **argv)
                             &replacing_prog,
                             &service,
                             &ait,
+                            &new_time,
                             &pid1,
                             &pid2,
                             &tsc_pid);
@@ -3405,6 +3609,7 @@ int main(int argc, char **argv)
            &replacing_prog,
            &service,
            &ait,
+           &new_time,
            pid1,
            pid2,
            tsc_pid);
@@ -3415,4 +3620,3 @@ int main(int argc, char **argv)
 
   return 0;
 }
-
