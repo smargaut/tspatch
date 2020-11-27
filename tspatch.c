@@ -7,6 +7,10 @@
 
 #include <libgen.h> /* for basename */
 
+/*
+** TODO: add versioning
+*/
+
 /*******************/
 /*** COMPILATION ***/
 /*******************/
@@ -253,7 +257,8 @@ static void init_ait(ait_t *ait)
 /*************/
 
 /*
-** TODO: review, fix and improve trace handling (this is very artisanal)
+** TODO: review, fix and improve trace handling (this is very prehistoric)
+**       also, add -v -vv -vvv options to command line
 */
 
 #define print_error  printf
@@ -276,7 +281,7 @@ static void dump_buffer(const uint8_t *buffer,
   print_output("\n");
   for (i = 0; i < size; i++)
   {
-    if (0x20 <= buffer[i] && buffer[i] < 0x76)
+    if (0x20 <= buffer[i] && buffer[i] < 0x7F)
     {
       print_output("%c", buffer[i]);
     }
@@ -310,6 +315,40 @@ static void close_file(FILE *file)
     fflush(file);
     fclose(file);
   }
+}
+
+static uint32_t get_file_size(const char *filename)
+{
+  FILE     *file;
+  long int  size;
+  int       ret;
+
+  file = fopen(filename, "rb");
+  if (file == NULL)
+  {
+    print_user("%s: cannot open %s\n",
+               __FUNCTION__, filename);
+    return 0;
+  }
+
+  ret = fseek(file, 0, SEEK_END);
+  if (0 != ret)
+  {
+    print_user("%s: cannot seek in %s\n",
+               __FUNCTION__, filename);
+    return 0;
+  }
+
+  size = ftell(file);
+
+  if (size < 0)
+  {
+    print_user("%s: cannot tell in %s\n",
+               __FUNCTION__, filename);
+    return 0;
+  }
+
+  return size;
 }
 
 /*
@@ -504,6 +543,8 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
 
   if (pid == PID_TDT && packet[0] == TID_TDT)
   {
+    /* This function pertains to MPEG packet level,  */
+    /* but DVB table id is tested, this is an heresy */
     print_debug("%s: TDT section has no CRC\n",
                 __FUNCTION__);
   }
@@ -592,7 +633,7 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
   ** Show the list
   */
 
-  print_output("%s: found %lu PIDs\n",
+  print_output("%s: found %lu different PIDs\n",
                __FUNCTION__, nb_pids);
   for (i = 0; i < size; i++)
   {
@@ -617,6 +658,10 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
                    list[i].tid, list[i].tid);
     }
   }
+
+  /*
+  ** TODO: for each PID, add number of packets
+  */
 }
 
 static uint32_t pcr1_minus_pcr2(const pcr_t *pcr1, const pcr_t *pcr2)
@@ -633,7 +678,7 @@ static uint32_t pcr1_minus_pcr2(const pcr_t *pcr1, const pcr_t *pcr2)
   }
 
   /*
-  ** TODO: extension part of PCR
+  ** TODO: take extension part of PCR into account
   */
 
   return pcr_diff;
@@ -797,8 +842,11 @@ static bool_t check_crc32(const uint8_t *buffer, unsigned length)
   uint32_t found_crc;
   uint32_t read_crc;
 
-  //found_crc = get_crc_v1(buffer, length);
+#if 0 // v2 should be faster
+  found_crc = get_crc_v1(buffer, length);
+#else
   found_crc = get_crc_v2(0, buffer, length);
+#endif
 
   read_crc = ((uint32_t)buffer[length + 0]) << 24
            | ((uint32_t)buffer[length + 1]) << 16
@@ -1723,6 +1771,8 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
 
   /*
   ** TODO: improve this section_length update
+  **
+  ** Question that came long after this TODO writing: why ? what's wrong with this ?
   */
   sl = section + 1;
 
@@ -1838,6 +1888,9 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
 ** TDT/TOT tools
 */
 
+#define GET_DECIMAL_FROM_BCD(x) (((x) >> 4) * 10 + (x) % 16)
+#define GET_BCD_FROM_DECIMAL(x) (((x) / 10 << 4) + (x) % 10)
+
 typedef struct
 {
   uint16_t year;   /* up to 20XX */
@@ -1862,9 +1915,6 @@ static void init_date_time(date_time_t *time)
 
   /* Should init with 'now' time ? */
 }
-
-#define GET_DECIMAL_FROM_BCD(x) (((x) >> 4) * 10 + (x) % 16)
-#define GET_BCD_FROM_DECIMAL(x) (((x) / 10 << 4) + (x) % 10)
 
 static bool_t get_utc_time(const uint8_t *section,
                            date_time_t   *utc_time,
@@ -2379,6 +2429,90 @@ static bool_t parse_ait(uint8_t     *section,
 }
 
 /*
+** Unique PID stream
+*/
+
+static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
+{
+  static uint16_t unique_pid = INVALID_PID;
+  static uint16_t second_pid = INVALID_PID;
+  static bool_t invalid_pid_message = FALSE;
+
+  uint16_t pid;
+  size_t   nb_bytes;
+  int      ret;
+  bool_t   success = TRUE;
+
+  // call goto_first_packet the first time ?
+
+  do
+  {
+    if (feof(file))
+    {
+      ret = fseek(file, 0, SEEK_SET);
+      assert(0 == ret);
+
+      if (unique_pid == INVALID_PID)
+      {
+        print_user("%s: the unique PID stream does not contain any valid PID\n",
+                   __FUNCTION__);
+        success = FALSE;
+        break;
+      }
+    }
+
+    nb_bytes = fread(packet, 1, TS_PACKET_SIZE, file);
+    if (TS_PACKET_SIZE != nb_bytes)
+    {
+      print_info("%s: truncated packet in unique PID stream\n",
+                 __FUNCTION__);
+      success = FALSE;
+      break;
+    }
+
+    if (packet[0] == TS_SYNCHRO_BYTE)
+    {
+      print_info("%s: disynchronization in unique PID stream\n",
+                 __FUNCTION__);
+      success = FALSE;
+      break;
+    }
+
+    pid = get_pid(packet);
+    if (pid == INVALID_PID)
+    {
+      if (! invalid_pid_message)
+      {
+        print_debug("%s: found %u (0x%X) in unique PID stream !\n",
+                   __FUNCTION__, pid, pid);
+        invalid_pid_message = TRUE;
+      }
+      continue;
+    }
+
+    if (unique_pid == INVALID_PID)
+    {
+      print_debug("%s: unique PID is %u (0x%X)\n",
+                 __FUNCTION__, pid, pid);
+      unique_pid = pid;
+      continue;
+    }
+
+    if (pid != unique_pid && second_pid == INVALID_PID)
+    {
+      print_user("%s: the unique PID stream was supposed to contain one unique PID only\n");
+      print_user("%s: but found at least two, %u (0x%X) and %u (0x%X), will keep %u (0x%X) only\n",
+                 __FUNCTION__, unique_pid, unique_pid, pid, pid, unique_pid, unique_pid);
+      second_pid = pid;
+      continue;
+    }
+
+  } while (pid != unique_pid || unique_pid == INVALID_PID);
+
+  return success;
+}
+
+/*
 ** HLS tools
 */
 
@@ -2577,11 +2711,31 @@ typedef enum
   REPLACE_TIME,
   REPLACE_AIT_ID,
   REPLACE_AIT_URL,
+  DUPLICATE_PID,
+  INSERT_PID,
+  CRUSH_PID,
   TOGGLE_TSC,
   HLS,
   NB_COMMANDS,
 
 } command_t;
+
+// TODO: improve the command management
+//       today, when adding a new command,
+//       we need to update
+//         - command_t type
+//         - command_string variable
+//         - command_mask_t type
+//         - show_usage function
+//       this set of actions should be reduced
+
+// TODO: maybe simplify the command management,
+//       maybe just accept one command among the following
+//         - show: with multiple arguments
+//         - patch: to do one action at a time
+//         - hls: which creates some other content
+//
+//       this will take care of patching conflicts (some commands are exclusive)
 
 static const char *command_string[NB_COMMANDS] =
 {
@@ -2606,10 +2760,13 @@ static const char *command_string[NB_COMMANDS] =
   "-rep-aud",
   "-rep-vid",
   "-rep-pid",
-  "-rep-provider",
+  "-rep-prov",
   "-rep-time",
   "-rep-ait-id",
   "-rep-ait-url",
+  "-dup-pid",
+  "-ins-pid",
+  "-crush-pid",
   "-toggle-tsc",
   "-hls",
 };
@@ -2646,6 +2803,9 @@ typedef enum
   DECLARE_COMMAND_MASK(REPLACE_TIME),
   DECLARE_COMMAND_MASK(REPLACE_AIT_ID),
   DECLARE_COMMAND_MASK(REPLACE_AIT_URL),
+  DECLARE_COMMAND_MASK(DUPLICATE_PID),
+  DECLARE_COMMAND_MASK(INSERT_PID),
+  DECLARE_COMMAND_MASK(CRUSH_PID),
   DECLARE_COMMAND_MASK(TOGGLE_TSC),
   DECLARE_COMMAND_MASK(HLS),
 
@@ -2676,8 +2836,14 @@ static bool_t goto_first_packet(FILE *file)
   return FALSE;
 }
 
+/*
+** TODO: the number of args is not acceptable,
+**       do something, anything, but something
+*/
+
 static void parse_ts(const char        *filename,
                      FILE              *file,
+                     FILE              *new_file,
                      uint32_t           command,
                      prog_t            *target_prog,
                      const prog_t      *new_prog,
@@ -2686,11 +2852,12 @@ static void parse_ts(const char        *filename,
                      const date_time_t *start_time,
                      uint16_t           pid1,
                      uint16_t           pid2,
-                     uint16_t           tsc_pid)
+                     uint16_t           tsc_pid,
+                     FILE               *ups_file)
 {
   int       ret;
   static
-  uint8_t   packet[TS_PACKET_SIZE];
+  uint8_t   packet[2 * TS_PACKET_SIZE];
   uint8_t  *section;
   const
   uint8_t  *payload;
@@ -2702,6 +2869,7 @@ static void parse_ts(const char        *filename,
   uint16_t  section_length;
   uint32_t  nb_packets;
   size_t    nb_bytes;
+  unsigned  insertion;
   uint8_t   patch_level;
   bool_t    rewind_file;
 
@@ -2738,6 +2906,7 @@ static void parse_ts(const char        *filename,
 
   while (0 == feof(file))
   {
+    insertion = 0;
     patch_level = 0;
     rewind_file = FALSE;
 
@@ -2758,6 +2927,11 @@ static void parse_ts(const char        *filename,
     {
       /*
       ** TODO: just one show pid command should be enough
+      **
+      ** TODO: review command list, maybe some are unnecessary
+      **
+      ** TODO: the show-all series is dumb, remove it, use the simple show series instead,
+      **       and manage version_number
       */
 
       if (IS_ACTIVE(command, SHOW_ALL_PID))
@@ -2984,7 +3158,7 @@ static void parse_ts(const char        *filename,
               /* First TOT/TDT */
               next_time = *start_time;
             }
-	    else
+            else
             {
               next_time += utc_time - prev_utc_time;
             }
@@ -2997,7 +3171,7 @@ static void parse_ts(const char        *filename,
 
             prev_utc_time = utc_time;
           }
-	  else if (IS_ACTIVE(command, SHOW_TIME))
+          else if (IS_ACTIVE(command, SHOW_TIME))
           {
             show_time(&utc_time);
           }
@@ -3030,9 +3204,29 @@ static void parse_ts(const char        *filename,
       section = get_section(packet, FALSE, FALSE);
       patch_level |= parse_ait(section, ait, &section_length) ? 7 : 0;
     }
+
+    /*
+    ** Operations on PIDs
+    */
     if (INVALID_PID != pid1 && pid == pid1)
     {
-      patch_level |= set_pid(packet, pid2) ? 1 : 0;
+      if (IS_ACTIVE(command, REPLACE_PID))
+      {
+        patch_level |= set_pid(packet, pid2) ? 1 : 0;
+      }
+      else if (IS_ACTIVE(command, DUPLICATE_PID))
+      {
+        memcpy(&packet[TS_PACKET_SIZE], &packet[0], TS_PACKET_SIZE);
+        insertion = set_pid(&packet[TS_PACKET_SIZE], pid2) ? 1 : 0;
+      }
+      else if (IS_ACTIVE(command, INSERT_PID))
+      {
+        insertion = get_next_unique_pid_packet(ups_file, packet + TS_PACKET_SIZE) ? 1 : 0;
+      }
+      else if (IS_ACTIVE(command, CRUSH_PID))
+      {
+        patch_level |= get_next_unique_pid_packet(ups_file, packet) ? 1 : 0;
+      }
     }
     if (pid == tsc_pid && IS_ACTIVE(command, TOGGLE_TSC))
     {
@@ -3059,7 +3253,13 @@ static void parse_ts(const char        *filename,
       //dump_buffer(section, section_length + SECTION_CRC_SIZE, "after CRC update");
     }
 
-    if ((patch_level & 1) != 0)
+    if (new_file != NULL)
+    {
+      nb_bytes = fwrite(packet, 1, TS_PACKET_SIZE * (1 + insertion), new_file);
+      assert((TS_PACKET_SIZE * (1 + insertion)) == nb_bytes);
+      fflush(new_file);
+    }
+    else if ((patch_level & 1) != 0)
     {
       /*
       ** Rewind file for one TS packet & Write back packet into file
@@ -3069,8 +3269,8 @@ static void parse_ts(const char        *filename,
       assert(0 == ret);
 
       nb_bytes = fwrite(packet, 1, TS_PACKET_SIZE, file);
-      fflush(file);
       assert(TS_PACKET_SIZE == nb_bytes);
+      fflush(file);
     }
 
     if (IS_ACTIVE(command, HLS))
@@ -3102,7 +3302,7 @@ static void show_usage(const char *name)
   print_user("  filename.ts is input transport stream file\n");
   print_user("  [commands]  is one or several out of\n");
   print_user("\n");
-  print_user("    selection commands\n");  
+  print_user("    selection commands\n");
   print_user("    -pn <pn>           select a program with program number\n");
   print_user("                       NOTE: some display and patching commands\n");
   print_user("                       require a program selection;\n");
@@ -3111,7 +3311,7 @@ static void show_usage(const char *name)
   print_user("    -aud <pid>         select a audio PID\n");
   print_user("    -vid <pid>         select a video PID\n");
   print_user("\n");
-  print_user("    display commands\n");  
+  print_user("    display commands\n");
   print_user("    -show-time         display stream date and time\n");
   print_user("    -show-br           display instant and average bitrates\n");
   print_user("    -show-pat          display the PAT\n");
@@ -3123,7 +3323,7 @@ static void show_usage(const char *name)
   print_user("    -show-sdt          display the SDT\n");
   print_user("    -show-ait <pid>    display the AIT identified by its PID\n");
   print_user("\n");
-  print_user("    file patching commands\n");  
+  print_user("    file patching commands\n");
   print_user("    -rep-tsid <tsid>   replace transport stream id by new one\n");
   print_user("    -rep-pn <pn>       replace selected program number by new one\n");
   print_user("    -rep-pmt <pid>     replace selected program PMT PID by new one\n");
@@ -3132,17 +3332,24 @@ static void show_usage(const char *name)
   print_user("                       found in selected program PMT by new one\n");
   print_user("    -rep-vid <pid>     replace selected video PID or the first video PID\n");
   print_user("                       found in selected program PMT by new one\n");
-  print_user("    -rep-pid <p1> <p2> replace first PID by second one\n");
-  print_user("    -rep-provider <provider name>\n");
+  print_user("    -rep-prov <name>   replace provider name in SDT\n");
+
   // TODO: allow complete date & time replacement
-  print_user("    -rep-time <new-time> where new-time can be either either the 'now' magic word or a year number\n");
+  print_user("    -rep-time <time>   where <time> can be either either the 'now' magic word or a year number\n");
+
+  print_user("    -rep-pid <pid> <newpid>          replace PID value\n");
+  print_user("    -dup-pid <srcpid> <dstpid>       duplicate packets\n");
+  print_user("    -ins-pid <pid> <unique-pid.ts>   insert packets of <unique-pid.ts> after each packet identified by PID\n");
+  print_user("    -crush-pid <pid> <unique-pid.ts> crush packets identified by PID by packets of <unique-pid.ts>\n");
+  print_user("    NOTE: -rep-pid -dup-pid -ins-pid -crush-pid commands are exclusive\n");
+  print_user("    -toggle-tsc <pid> inverse the TSC bits of packets of selected PID\n");
+
   print_user("\n");
-  print_user("    special AIT\n");  
+  print_user("    special AIT\n");
   print_user("    -rep-ait-id <app_id>\n");
   print_user("    -rep-ait-url <url base> <url entry file name>\n");
-  print_user("    -toggle-tsc <pid> inverse the TSC bits of packets of selected PID\n");
   print_user("\n");
-  print_user("    special HLS\n");  
+  print_user("    special HLS\n");
   print_user("    -hls <duration>    split the input TS file into chunks of duration specified in seconds\n");
   print_user("                       and create corresponing m3u manifest\n");
 }
@@ -3155,15 +3362,19 @@ static uint32_t parse_args(int argc, char **argv,
                            date_time_t *rep_time,
                            uint16_t    *pid1,
                            uint16_t    *pid2,
-                           uint16_t    *tsc_pid)
+                           uint16_t    *tsc_pid,
+                           char       **unique_pid_stream_filename)
 {
   char     *command;
   char     *value1;
   char     *value2;
+  int       exclusive_counter;
   int       i;
   uint32_t  user_command = 0;
 
   unsigned  chunk_duration; /* seconds */
+
+  assert(NB_COMMANDS <= (8 * sizeof (uint32_t)));
 
   for (i = 0; i < argc; i++)
   {
@@ -3318,27 +3529,66 @@ static uint32_t parse_args(int argc, char **argv,
         value2 = *argv++;
         i++;
 
-        if (IS_COMMAND(command, REPLACE_PID))
-        {
-          *pid1 = atoi(value1);
-          *pid2 = atoi(value2);
-          user_command |= COMMAND_MASK_REPLACE_PID;
-        }
-        else if (IS_COMMAND(command, REPLACE_AIT_URL))
+        if (IS_COMMAND(command, REPLACE_AIT_URL))
         {
           rep_ait->url.base = value1;
           rep_ait->url.file = value2;
           user_command |= COMMAND_MASK_REPLACE_AIT_URL;
         }
+        else if (IS_COMMAND(command, REPLACE_PID))
+        {
+          *pid1 = atoi(value1);
+          *pid2 = atoi(value2);
+          user_command |= COMMAND_MASK_REPLACE_PID;
+        }
+        else if (IS_COMMAND(command, DUPLICATE_PID))
+        {
+          *pid1 = atoi(value1);
+          *pid2 = atoi(value2);
+          user_command |= COMMAND_MASK_DUPLICATE_PID;
+        }
+        else if (IS_COMMAND(command, INSERT_PID))
+        {
+          *pid1 = atoi(value1);
+          *unique_pid_stream_filename = value2;
+          user_command |= COMMAND_MASK_INSERT_PID;
+        }
+        else if (IS_COMMAND(command, CRUSH_PID))
+        {
+          *pid1 = atoi(value1);
+          *unique_pid_stream_filename = value2;
+          user_command |= COMMAND_MASK_CRUSH_PID;
+        }
         else
         {
           /* User command error */
+          print_user("cannot identify command %s\n", command);
         }
       }
     }
   }
 
+  /* Check exclusive commands are not multiple */
+
+  exclusive_counter  = 0;
+  exclusive_counter += 0 != user_command & COMMAND_MASK_REPLACE_PID ? 1 : 0;
+  exclusive_counter += 0 != user_command & COMMAND_MASK_DUPLICATE_PID ? 1 : 0;
+  exclusive_counter += 0 != user_command & COMMAND_MASK_INSERT_PID ? 1 : 0;
+  exclusive_counter += 0 != user_command & COMMAND_MASK_CRUSH_PID ? 1 : 0;
+  if (exclusive_counter > 1)
+  {
+    print_user("commands pertaining to PID manipulations are exclusive, please select one only");
+    exit(0);
+  }
+
   /* Summary of options after parsing is done */
+
+  /*
+  ** TODO: improve the summary part,
+  **       some tests are done by checking arguments,
+  **       some others by checking user command,
+  **       need more harmony
+  */
 
   if (INVALID_TRANSPORT_STREAM_ID == rep_prog->tsid)
   {
@@ -3464,23 +3714,63 @@ static uint32_t parse_args(int argc, char **argv,
     print_user("  - show all detected PIDs only once\n");
   }
 
-  if (0 != (user_command & COMMAND_MASK_REPLACE_PID))
+  if (    0 != (user_command & COMMAND_MASK_REPLACE_PID)
+       || 0 != (user_command & COMMAND_MASK_DUPLICATE_PID)
+       || 0 != (user_command & COMMAND_MASK_INSERT_PID)
+       || 0 != (user_command & COMMAND_MASK_CRUSH_PID))
   {
-    if (*pid1 < INVALID_PID && *pid2 <= INVALID_PID)
+    if (*pid1 < INVALID_PID)
     {
-      /*
-      ** Second PID accepts invalid value
-      */
-      print_user("  - replace PID %d (0x%X) by %d (0x%X)\n",
-                 *pid1, *pid1,
-                 *pid2, *pid2);
+      if (    0 != (user_command & COMMAND_MASK_REPLACE_PID)
+           || 0 != (user_command & COMMAND_MASK_DUPLICATE_PID))
+      {
+        if (*pid2 <= INVALID_PID)
+        {
+          print_user("  - %s PID %d (0x%X) %s %d (0x%X)\n",
+                     0 != user_command & COMMAND_MASK_REPLACE_PID ? "replace" : "duplicate",
+                     *pid1, *pid1,
+                     0 != user_command & COMMAND_MASK_REPLACE_PID ? "by" : "to",
+                     *pid2, *pid2);
+        }
+        else
+        {
+          *pid1 = INVALID_PID;
+        }
+      }
+      else
+      {
+        if (*unique_pid_stream_filename != NULL && strlen(*unique_pid_stream_filename) > 3)
+        {
+          if (0 != (user_command & COMMAND_MASK_INSERT_PID))
+          {
+            print_user("  - insert packets of %s after PID %d (0x%X)\n",
+                       *unique_pid_stream_filename,
+                       *pid1, *pid1);
+          }
+          else if (0 != (user_command & COMMAND_MASK_CRUSH_PID))
+          {
+            print_user("  - crush PID %d (0x%X) by packets of %s\n",
+                       *pid1, *pid1,
+                       *unique_pid_stream_filename);
+          }
+        }
+        else
+        {
+          *pid1 = INVALID_PID;
+        }
+      }
     }
-    else
+
+    if (*pid1 == INVALID_PID)
     {
-      print_user("  - don't replace PID because of invalid value\n");
+      print_user("  - don't make operation on PID because of invalid value\n");
       *pid1 = INVALID_PID;
       *pid2 = INVALID_PID;
+      *unique_pid_stream_filename = NULL;
       user_command &= ~COMMAND_MASK_REPLACE_PID;
+      user_command &= ~COMMAND_MASK_DUPLICATE_PID;
+      user_command &= ~COMMAND_MASK_INSERT_PID;
+      user_command &= ~COMMAND_MASK_CRUSH_PID;
     }
   }
 
@@ -3493,7 +3783,7 @@ static uint32_t parse_args(int argc, char **argv,
     }
     else
     {
-      print_user("  - need to select an AIT PID to replace the ID, abort replacement command\n");
+      print_user("  - need to select an AIT PID to replace the ID, abort replacement\n");
       init_ait(rep_ait);
       user_command &= ~COMMAND_MASK_REPLACE_AIT_ID;
     }
@@ -3508,7 +3798,7 @@ static uint32_t parse_args(int argc, char **argv,
     }
     else
     {
-      print_user("  - need to select an AIT PID to replace the URL, abort replacement command\n");
+      print_user("  - need to select an AIT PID to replace the URL, abort replacement\n");
       init_ait(rep_ait);
       user_command &= ~COMMAND_MASK_REPLACE_AIT_URL;
     }
@@ -3543,8 +3833,11 @@ static uint32_t parse_args(int argc, char **argv,
 int main(int argc, char **argv)
 {
   FILE       *file;
+  FILE       *new_file;
+  FILE       *unique_pid_stream_file;
   char       *toolname;
   char       *filename;
+  char       *unique_pid_stream_filename;
   uint32_t    user_command;
   prog_t      selected_prog;
   prog_t      replacing_prog;
@@ -3555,6 +3848,8 @@ int main(int argc, char **argv)
   uint16_t    pid2;
   uint16_t    tsc_pid;
 
+  const char *new_filename = "dest.ts";
+
   init_prog(&selected_prog);
   init_prog(&replacing_prog);
   init_service(&service);
@@ -3563,6 +3858,8 @@ int main(int argc, char **argv)
   pid1    = INVALID_PID;
   pid2    = INVALID_PID;
   tsc_pid = INVALID_PID;
+
+  unique_pid_stream_filename = NULL;
 
   /*
   ** TODO: allow directory processing in addition of file processing
@@ -3590,7 +3887,8 @@ int main(int argc, char **argv)
                             &new_time,
                             &pid1,
                             &pid2,
-                            &tsc_pid);
+                            &tsc_pid,
+                            &unique_pid_stream_filename);
   service.id = selected_prog.number;
 
   init_crc();
@@ -3602,8 +3900,38 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  if (NULL != unique_pid_stream_filename)
+  {
+    unique_pid_stream_file = fopen(unique_pid_stream_filename, "rb"); // just read
+    if (NULL == unique_pid_stream_file)
+    {
+      print_user("cannot open %s\n", unique_pid_stream_file);
+      return 0;
+    }
+  }
+
+  if (    0 != (user_command & COMMAND_MASK_DUPLICATE_PID)
+       || 0 != (user_command & COMMAND_MASK_INSERT_PID))
+  {
+    print_debug("create %s\n", new_filename);
+
+    new_file = fopen(new_filename, "wb");
+    if (NULL == new_file)
+    {
+      print_user("cannot create %s\n", new_filename);
+      return 0;
+    }
+
+    print_user("new file %p\n", new_file);
+  }
+  else
+  {
+    new_file = NULL;
+  }
+
   parse_ts(filename,
            file,
+           new_file,
            user_command,
            &selected_prog,
            &replacing_prog,
@@ -3612,9 +3940,42 @@ int main(int argc, char **argv)
            &new_time,
            pid1,
            pid2,
-           tsc_pid);
+           tsc_pid,
+           unique_pid_stream_file);
 
-  fclose(file);
+  close_file(file);
+
+  if (NULL != unique_pid_stream_filename)
+  {
+    close_file(unique_pid_stream_file);
+  }
+
+  if (NULL != new_file)
+  {
+    close_file(new_file);
+
+    // Just to check
+    print_user("input file size = %lu\n", get_file_size(filename));
+    print_user("temp  file size = %lu\n", get_file_size(new_filename));
+    if (unique_pid_stream_filename != NULL)
+    {
+      print_user("ups  file size = %lu\n", get_file_size(unique_pid_stream_filename));
+    }
+
+    // Now, the temp file becomes the main file
+
+/*
+    if (0 != remove(filename))
+    {
+      print_user("remove %s failed\n", filename);
+    }
+
+    if (0 != rename(new_filename, filename))
+    {
+      print_user("rename %s to %s failed\n", new_filename, filename);
+    }
+*/
+  }
 
   print_user("%s end\n", toolname);
 
