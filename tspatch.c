@@ -34,6 +34,7 @@ typedef unsigned long  uint32_t;
 /*
 ** TODO: complete and use these macros
 */
+#define READ_32BITS(p)      ((((uint32_t)p[0]) << 24) | (((uint32_t)p[1]) << 16) | (((uint32_t)p[2]) << 8) | (((uint32_t)p[3]) << 0))
 #define READ_16BITS(p)      ((((uint16_t)(*(p))<<8)&0xFF00) | (uint16_t)*((p)+1))
 #define READ_12BITS(p)      ((((uint16_t)(*(p))<<8)&0x0F00) | (uint16_t)*((p)+1))
 #define READ_08BITS(p)      (*(p))
@@ -241,6 +242,7 @@ typedef struct
   ait_url_t url;
   uint16_t  pid;
   uint16_t  id;
+  uint8_t   tpl;
 
 } ait_t;
 
@@ -250,6 +252,7 @@ static void init_ait(ait_t *ait)
   ait->url.file = NULL;
   ait->pid      = INVALID_PID;
   ait->id       = 0;
+  ait->tpl      = 0xFF;
 }
 
 /*************/
@@ -2008,17 +2011,109 @@ typedef struct
 
 } length_set_t;
 
-static void patch_ait(uint8_t      *s1,      /* begining of the section */
-                      uint8_t      *s2,      /* section position where replacement happens */
-                      const char   *new_url, /* replacing string */
-                      length_set_t *len)     /* set of length fields that are impacted by the patch */
+static const char *get_ait_application_type(uint16_t value)
+{
+  return (0x0000 == value) ? "reserved" :
+         (0x0001 == value) ? "DVB-J" :
+         (0x0002 == value) ? "DVB-HTML" :
+         (0x0003 == value) ? "MediaHighway" :
+         (0x0004 == value) ? "CLI" :
+         (0x0005 == value) ? "MediaHighway Declarative" :
+         (0x0006 == value) ? "DCAP-J" :
+         (0x0007 == value) ? "DCAP-X" :
+         (0x0008 == value) ? "MHEG" :
+         (0x0009 == value) ? "?" :
+         (0x000A == value) ? "OpenTV" :
+         (0x0010 == value) ? "HbbTV" :
+         (0x0011 == value) ? "OIPF DAE" :
+         (0x0012 == value) ? "reserved" :
+                             "invalid";
+}
+
+static const char *get_ait_application_use(uint16_t id)
+{
+  return (0      == id               ) ? "shall not be used"        :
+         (0      <  id && id < 0x4000) ? "unsigned apps"            :
+         (0x4000 <= id && id < 0x8000) ? "signed apps"              :
+         (0x8000 <= id && id < 0xA000) ? "privileged apps"          :
+         (0xA000 <= id && id < 0xFFFE) ? "RFU"                      :
+         (0xFFFE == id               ) ? "wildcard for signed apps" :
+         (0xFFFF == id               ) ? "wildcard for all apps"    :
+                                         "invalid";
+}
+
+static const char *get_ait_application_control_code(uint16_t value)
+{
+  return (1 == value) ? "AUTOSTART" :
+         (2 == value) ? "PRESENT" :
+         (3 == value) ? "DESTROY" :
+         (4 == value) ? "KILL" :
+         (5 == value) ? "PREFETCH" :
+         (6 == value) ? "REMOTE" :
+         (7 == value) ? "DISABLED" :
+         (8 == value) ? "PLAYBACK-AUTOSTART" :
+                        "RFU";
+}
+
+static const char *get_ait_descriptor_tag(uint16_t value)
+{
+  return (0x00 == value) ? "application descriptor" :
+         (0x01 == value) ? "application name descriptor" :
+         (0x02 == value) ? "transport protocol descriptor" :
+         (0x05 == value) ? "external application authorization descriptor" :
+         (0x06 == value) ? "application recording descriptor" :
+         (0x0B == value) ? "application icons descriptor" :
+         (0x10 == value) ? "application storage descriptor" :
+         (0x14 == value) ? "graphics constraints descriptor" :
+         (0x15 == value) ? "simple application location descriptor" :
+         (0x16 == value) ? "application usage descriptor" :
+         (0x17 == value) ? "simple application boundary descriptor" :
+         (0x5F == value) ? "private data specifier descriptor" :
+         (0x66 == value) ? "data broadcast id descriptor" :
+         (0x6F == value) ? "application signalling descriptor" :
+         (0x71 == value) ? "service identifier descriptor" :
+                           "unexpected descriptor";
+}
+
+static void patch_section(const uint8_t *section,
+                          uint8_t       *patching_point,
+                          unsigned       size,
+                          unsigned       patched_size,
+                          unsigned       patching_size)
+{
+  unsigned remaining_size;
+  uint8_t buffer[TS_PACKET_SIZE];
+
+  assert(section < patching_point);
+  assert(size < TS_PACKET_SIZE); // support single section right now
+
+  remaining_size = size - (patching_point - section);
+  assert(patched_size <= remaining_size);
+  remaining_size -= patched_size;
+
+  if (patching_size > patched_size)
+  {
+    assert((size + patching_size - patched_size) < TS_PACKET_SIZE);
+  }
+
+  memcpy(buffer, patching_point + patched_size, remaining_size);
+  patching_point += patching_size;
+  memcpy(patching_point, buffer, remaining_size);
+  patching_point += remaining_size;
+  memset(patching_point, 0xFF, TS_PACKET_SIZE - (patching_point - section));
+}
+
+static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
+                          uint8_t      *s2,      /* section position where replacement happens */
+                          const char   *new_url, /* replacing string */
+                          length_set_t *len)     /* set of length fields that are impacted by the patch */
 {
   unsigned new_url_len;
   unsigned size;                             /* restoring size */
   unsigned index;                            /* index in the temporary buffer */
-  uint16_t diff;                             /* string length difference between repllacing and replaced */
+  uint16_t diff;                             /* string length difference between replacing and replaced */
   static
-  uint8_t  buffer[TS_PACKET_SIZE - 4];       /* temporary buffer where the secion is stored */
+  uint8_t  buffer[TS_PACKET_SIZE - 4];       /* temporary buffer where the section is stored */
 
   //dump_buffer(s1, 184, "before ait patch");
 
@@ -2057,16 +2152,14 @@ static bool_t parse_ait(uint8_t     *section,
                         const ait_t *new_ait,
                         uint16_t    *length)
 {
-  /*
-  ** Does not manage the common decriptors loop
-  */
   uint8_t  *s                                            = section;
   uint8_t  *section_length_position                      = NULL;
   uint8_t  *application_loop_length_position             = NULL;
   uint8_t  *application_descriptors_loop_length_position = NULL;
-  uint8_t  *base_descriptor_length_position              = NULL;
+  uint8_t  *descriptor_length_position                   = NULL;
   uint8_t  *file_descriptor_length_position              = NULL;
 
+  uint16_t real_section_length;
   uint16_t section_length;
   uint16_t application_type;
   uint16_t application_id;
@@ -2075,6 +2168,11 @@ static bool_t parse_ait(uint8_t     *section,
   uint16_t common_descriptors_length;
   uint16_t protocol_id;
   uint16_t application_profile;
+
+  uint16_t old_selector_bytes_size;
+  uint16_t new_selector_bytes_size;
+  uint16_t selector_bytes_size_diff;
+
   uint8_t  table_id;
   uint8_t  version_number;
   uint8_t  section_number;
@@ -2095,18 +2193,29 @@ static bool_t parse_ait(uint8_t     *section,
   uint8_t  j;
   uint8_t  k;
   uint8_t  l;
+  bool_t   heavy_patch;
   bool_t   patch = FALSE;
 
   table_id = s[0]; s++;
   section_length_position = s;
   section_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
   application_type = (((uint16_t)(s[0] & 0x7F)) << 8) | s[1]; s += 2;
-  version_number = (s[0] & 0x3E) >> 1; s++;
-  section_number = s[0]; s++;
-  last_section_number = s[0]; s++;
+  version_number = (s[0] & 0x3E) >> 1; s += 1;
+  section_number = s[0]; s += 1;
+  last_section_number = s[0]; s += 1;
   common_descriptors_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
-  application_loop_length_position = s;
+  /*
+  ** Common decriptors loop is bypassed, but should be displayed as well
+  */
+  application_loop_length_position = s + common_descriptors_length;
   application_loop_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
+
+  real_section_length = section_length + 3;
+
+  /*
+  ** TODO: show AIT only once,
+  **       then monitor version_number, and re-show AIT if it changes
+  */
 
   print_output("\nAIT\n");
   print_output("table_id: %d (0x%02X)\n", table_id, table_id);
@@ -2115,7 +2224,7 @@ static bool_t parse_ait(uint8_t     *section,
     print_output("table_id WARNING: different from 0x%02X\n", TID_AIT);
   }
   print_output("section_length: %d (0x%02X)\n", section_length, section_length);
-  print_output("application_type: %d (0x%02X)\n", application_type, application_type);
+  print_output("application_type: 0x%02X (%s)\n", application_type, get_ait_application_type(application_type));
   print_output("version_number: %d (0x%02X)\n", version_number, version_number);
   print_output("section_number: %d (0x%02X)\n", section_number, section_number);
   print_output("last_section_number: %d (0x%02X)\n", last_section_number, last_section_number);
@@ -2124,20 +2233,15 @@ static bool_t parse_ait(uint8_t     *section,
 
   for (i = 0; i < application_loop_length; )
   {
-    print_output("  organisation_id: 0x%02X%02X%02X%02X\n",
+    print_output("  organisation_id: %lu (0x%02X%02X%02X%02X)\n",
+                 READ_32BITS(s),
                  s[0], s[1], s[2], s[3]); s += 4;
     application_id = ((uint16_t)s[0] << 8) | s[1]; s += 2;
-    print_output("  application_id:  0x%04X %s\n",
-                 application_id,
-                 (0      == application_id                           ) ? "(not valid)"                :
-                 (0      <  application_id && application_id < 0x4000) ? "(unsigned app)"             :
-                 (0x4000 <= application_id && application_id < 0x8000) ? "(signed app)"               :
-                 (0x8000 <= application_id && application_id < 0xA000) ? "(RFU)"                      :
-                 (0xA000 <= application_id && application_id < 0xFFFE) ? "(signed app)"               :
-                 (0xFFFE == application_id                           ) ? "(wildcard for signed apps)" :
-                 (0xFFFF == application_id                           ) ? "(wildcard for all apps)"    :
-                                                                         "(IMPOSSIBLE)");
-    if (0 != new_ait->id) /* begining of patch */
+    print_output("  application_id: 0x%04X (%s)\n",
+                 application_id, get_ait_application_use(application_id));
+
+    /* Begining of application-id patch */
+    if (0 != new_ait->id)
     {
       s -= 2;
       print_output("  replace by 0x%04X\n\n", new_ait->id);
@@ -2146,59 +2250,43 @@ static bool_t parse_ait(uint8_t     *section,
       s[1] = (uint8_t)((0x00FF & application_id) >> 0);
       patch = TRUE;
       s += 2;
-    } /* end of patch */
+    }
+    /* End of application-id patch */
 
-    application_control_code = s[0]; s++;
+    application_control_code = s[0]; s += 1;
     application_descriptors_loop_length_position = s;
     application_descriptors_loop_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
 
     i += 9;
 
-    print_output("    application_control_code: %d (0x%02X) = %s\n",
-                  application_control_code, application_control_code,
-                  (1 == application_control_code) ? "AUTOSTART" :
-                  (2 == application_control_code) ? "PRESENT" :
-                  (3 == application_control_code) ? "DESTROY" :
-                  (4 == application_control_code) ? "KILL" :
-                  (5 == application_control_code) ? "PREFETCH" :
-                  (6 == application_control_code) ? "REMOTE" :
-                  (7 == application_control_code) ? "DISABLED" :
-                  (8 == application_control_code) ? "PLAYBACK_AUTOSTART" :
-                  "UNKNOWN");
+    print_output("    application_control_code: 0x%02X (%s)\n",
+                  application_control_code, get_ait_application_control_code(application_control_code));
     print_output("    application_descriptors_loop_length: %d (0x%02X)\n",
                  application_descriptors_loop_length, application_descriptors_loop_length);
 
     for (j = 0; j < application_descriptors_loop_length; )
     {
+      heavy_patch = FALSE;
+
       print_output("\n");
 
-      descriptor_tag = s[0]; s++;
-      descriptor_length = s[0]; s++;
+      descriptor_tag = s[0]; s += 1;
+      descriptor_length_position = s;
+      descriptor_length = s[0]; s += 1;
 
       i += 2;
       j += 2;
 
-      print_output("      descriptor_tag: %d (0x%02X) = %s\n",
-                   descriptor_tag, descriptor_tag,
-                   (0x00 == descriptor_tag) ? "application descriptor" :
-                   (0x01 == descriptor_tag) ? "application name descriptor" :
-                   (0x02 == descriptor_tag) ? "transport protocol descriptor" :
-                   (0x05 == descriptor_tag) ? "external application authorization descriptor" :
-                   (0x06 == descriptor_tag) ? "application recording descriptor" :
-                   (0x0B == descriptor_tag) ? "application icons descriptor" :
-                   (0x10 == descriptor_tag) ? "application storage descriptor" :
-                   (0x14 == descriptor_tag) ? "graphics constraints descriptor" :
-                   (0x15 == descriptor_tag) ? "simple application location descriptor" :
-                   (0x16 == descriptor_tag) ? "application usage descriptor" :
-                   (0x17 == descriptor_tag) ? "simple application boundary descriptor" :
-                   (0x66 == descriptor_tag) ? "data broadcast id descriptor" :
-                   (0x6F == descriptor_tag) ? "application signalling descriptor" :
-                   (0x71 == descriptor_tag) ? "service identifier descriptor" :
-                   "UNEXPECTED");
+      print_output("      descriptor_tag: 0x%02X (%s)\n",
+                   descriptor_tag, get_ait_descriptor_tag(descriptor_tag));
       print_output("      descriptor_length: %d (0x%02X)\n", descriptor_length, descriptor_length);
 
       if (0x00 == descriptor_tag)
       {
+        /*
+        ** Application descriptor
+        */
+
         application_profiles_length = s[0]; s++;
 
         print_output("      application_profiles_length: %d (0x%02X)\n",
@@ -2215,8 +2303,8 @@ static bool_t parse_ait(uint8_t     *section,
         }
 
         service_bound_flag = s[0] >> 7;
-        visibility = (s[0] & 0x60) >> 5; s++;
-        application_priority = s[0]; s++;
+        visibility = (s[0] & 0x60) >> 5; s += 1;
+        application_priority = s[0]; s += 1;
 
         print_output("      service_bound_flag: %d\n",
                      service_bound_flag);
@@ -2232,13 +2320,17 @@ static bool_t parse_ait(uint8_t     *section,
 
         for (k = 0; k < l; k++)
         {
-          transport_protocol_label = s[0]; s++;
+          transport_protocol_label = s[0]; s += 1;
           print_output("      transport_protocol_label %d: %d (0x%02X)\n", k,
                        transport_protocol_label, transport_protocol_label);
         }
       }
       else if (0x01 == descriptor_tag)
       {
+        /*
+        ** Application name descriptor
+        */
+
         if (descriptor_length > 3)
         {
           for (k = 0; k < descriptor_length; )
@@ -2247,7 +2339,7 @@ static bool_t parse_ait(uint8_t     *section,
                          s[0], s[1], s[2]);
             s += 3;
 
-            application_name_length = s[0]; s++;
+            application_name_length = s[0]; s += 1;
 
             for (l = 0; l < application_name_length; l++)
             {
@@ -2263,35 +2355,36 @@ static bool_t parse_ait(uint8_t     *section,
       }
       else if (0x02 == descriptor_tag)
       {
-        base_descriptor_length_position = s - 1;
+        /*
+        ** Transport protocol descriptor
+        */
 
         protocol_id = (((uint16_t)s[0]) << 8) | s[1]; s += 2;
-        transport_protocol_label = s[0]; s++;
+        transport_protocol_label = s[0]; s += 1;
 
-        print_output("      protocol_id: %d (0x%02X) = %s\n",
-                     protocol_id, protocol_id,
+        print_output("      protocol_id: 0x%04X (%s)\n",
+                     protocol_id,
                      (1 == protocol_id) ? "Object Carousel" :
                      (3 == protocol_id) ? "HTTP" :
-                     "UNEXPECTED");
-        print_output("      transport_protocol_label: %d (0x%02X)\n",
-                     transport_protocol_label, transport_protocol_label);
+                     "unexpected");
 
-        if (3 == protocol_id)
+        /* Begining of transport patch */
+        if (NULL != new_ait->url.base)
         {
-          URL_base_length = s[0]; s++;
+          if (3 == protocol_id)
+          {
+            /* Just patch URL */
 
-          if (0 != URL_base_length)
-          { 
-            print_output("      URL base: ");
-            for (k = 0; k < URL_base_length; k++)
-            {
-              print_output("%c", s[k]);
-            }
-            print_output("\n");
+            URL_base_length = s[0];
 
-            if (NULL != new_ait->url.base) /* begining of patch */
+            if (URL_base_length > 0)
             {
               length_set_t length_set;
+
+              /*
+              ** TODO: use the more modern patch_section function
+              **       isntead of antic patch_ait
+              */
 
               length_set.patch = URL_base_length;
               length_set.l1    = descriptor_length;
@@ -2299,8 +2392,10 @@ static bool_t parse_ait(uint8_t     *section,
               length_set.l3    = application_loop_length;
               length_set.l4    = section_length;
 
-              print_output("      replace by %s\n", new_ait->url.base);
-              patch_ait(section, s, new_ait->url.base, &length_set);
+              print_output("      set URL %s\n", new_ait->url.base);
+              print_output("      transport_protocol_label: %d (0x%02X)\n",
+                           transport_protocol_label, transport_protocol_label);
+              patch_ait_url(section, s + 1, new_ait->url.base, &length_set);
               patch = TRUE;
 
               URL_base_length                     = length_set.patch;
@@ -2309,51 +2404,206 @@ static bool_t parse_ait(uint8_t     *section,
               application_loop_length             = length_set.l3;
               section_length                      = length_set.l4;
 
-              *(s - 1) = URL_base_length;
-              base_descriptor_length_position[0] = descriptor_length;
-              write_12bits(application_descriptors_loop_length_position,
-                           application_descriptors_loop_length);
-              write_12bits(application_loop_length_position,
-                           application_loop_length);
-              write_12bits(section_length_position,
-                           section_length);
-            } /* end of patch */
+              s[0] = URL_base_length;
+              descriptor_length_position[0] = descriptor_length;
+              write_12bits(application_descriptors_loop_length_position, application_descriptors_loop_length);
+              write_12bits(application_loop_length_position, application_loop_length);
+              write_12bits(section_length_position, section_length);
+            }
+          }
+          else
+          {
+            /* Patch whole selector_bytes to make it HTTP */
+
+            protocol_id = 3;
+            print_output("      but change to 0x%04X\n", protocol_id);
+            print_output("      transport_protocol_label: %d (0x%02X)\n",
+                         transport_protocol_label, transport_protocol_label);
+            s -= 3;
+            s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
+            s[1] = (uint8_t)((protocol_id >> 0) & 0xFF);
+            /* don't change transport_protocol_label */
+            s += 3;
+
+            patch = TRUE;
+
+            old_selector_bytes_size = descriptor_length - 3; // remove protocol_id and transport_protocol_label fields
+            new_selector_bytes_size = 2 + strlen(new_ait->url.base); // URL_base_length + URL_extension_count
+
+            patch_section(section,
+                          s,
+                          real_section_length,
+                          old_selector_bytes_size,
+                          new_selector_bytes_size);
+
+            s[0] = 0; s += 1; // URL_base_length
+            memcpy(s, new_ait->url.base, strlen(new_ait->url.base));
+            s += strlen(new_ait->url.base);
+            s[0] = 0; s += 1; // URL_extenstion_count
+            s -= new_selector_bytes_size;
+
+            heavy_patch = TRUE;
+          }
+        }
+        else if (0xFF != new_ait->tpl)
+        {
+          if (1 == protocol_id)
+          {
+            /* Just patch Carousel ID */
+
+            print_output("      change transport_protocol_label to 0x%02 (old was 0x%02)\n",
+                         new_ait->tpl, transport_protocol_label);
+            transport_protocol_label = new_ait->tpl;
+            s -= 3;
+            s[2] = transport_protocol_label;
+            s += 3;
+
+            patch = TRUE;
+          }
+          else
+          {
+            /* Patch whole selector_bytes to make it OC */
+
+            protocol_id = 1;
+            print_output("      but change to 0x%04X\n",
+                         protocol_id);
+            print_output("      and change transport_protocol_label to 0x%02 (old was 0x%02)\n",
+                         new_ait->tpl, transport_protocol_label);
+            transport_protocol_label = new_ait->tpl;
+            s -= 3;
+            s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
+            s[1] = (uint8_t)((protocol_id >> 0) & 0xFF);
+            s[2] = transport_protocol_label;
+            s += 3;
+
+            patch = TRUE;
+
+            old_selector_bytes_size = descriptor_length - 3; // remove protocol_id and transport_protocol_label fields
+            new_selector_bytes_size = 2; // selector_bytes for OC is only 2-bytes long
+
+            patch_section(section,
+                          s,
+                          real_section_length,
+                          old_selector_bytes_size,
+                          new_selector_bytes_size);
+
+            s[0] = 0; s += 1; // remote_connection = 0
+            s[0] = 0x0B; s += 1; // component_tag = 0xB
+            s -= new_selector_bytes_size;
+
+            heavy_patch = TRUE;
+          }
+        }
+        else
+        {
+          print_output("      transport_protocol_label: %d (0x%02X)\n",
+                       transport_protocol_label, transport_protocol_label);
+        }
+
+        if (heavy_patch)
+        {
+          if (new_selector_bytes_size > old_selector_bytes_size)
+          {
+            selector_bytes_size_diff = new_selector_bytes_size - old_selector_bytes_size;
+
+            descriptor_length                   += selector_bytes_size_diff;
+            application_descriptors_loop_length += selector_bytes_size_diff;
+            application_loop_length             += selector_bytes_size_diff;
+            section_length                      += selector_bytes_size_diff;
+          }
+          else
+          {
+            selector_bytes_size_diff = old_selector_bytes_size - new_selector_bytes_size;
+
+            descriptor_length                   -= selector_bytes_size_diff;
+            application_descriptors_loop_length -= selector_bytes_size_diff;
+            application_loop_length             -= selector_bytes_size_diff;
+            section_length                      -= selector_bytes_size_diff;
+          }
+
+          descriptor_length_position[0] = descriptor_length;
+          write_12bits(application_descriptors_loop_length_position, application_descriptors_loop_length);
+          write_12bits(application_loop_length_position, application_loop_length);
+          write_12bits(section_length_position, section_length);
+        }
+        /* End of transport patch */
+
+        /*
+        ** Just show selector_bytes
+        */
+        if (3 == protocol_id) /* HTTP */
+        {
+          URL_base_length = s[0]; s += 1;
+
+          if (URL_base_length > 0)
+          { 
+            print_output("      URL base: ");
+            for (k = 0; k < URL_base_length; k++)
+            {
+              print_output("%c", s[k]);
+            }
+            print_output("\n");
 
             s += URL_base_length;
           }
 
-          URL_extension_count = s[0]; s++;
+          URL_extension_count = s[0]; s += 1;
 
-          if (0 != URL_extension_count)
+          for (k = 0; k < URL_extension_count; k++)
           {
-            for (k = 0; k < URL_extension_count; k++)
+            print_output("      URL extension %d: ", k + 1);
+            URL_extension_length = s[0]; s += 1;
+            for (l = 0; l < URL_extension_length; l++)
             {
-              print_output("      URL extension %d: ", k);
-              URL_extension_length = s[0]; s++;
-              for (l = 0; l < URL_extension_length; l++)
-              {
-                print_output("%c", s[l]);
-              }
-              print_output("\n");
-
-              s += URL_extension_length;
+              print_output("%c", s[l]);
             }
+            print_output("\n");
+
+            s += URL_extension_length;
           }
         }
-        else /* Object Carousel */
+        else if (1 == protocol_id) /* Object Carousel */
         {
-          print_output("      ");
-          for (k = 0; k < descriptor_length - 3; k++)
+          unsigned remote_connection = s[0] & 0x80 ? 1 : 0;
+          s += 1;
+
+          print_output("      remote_connection: %d\n", remote_connection);
+          if (remote_connection == 1)
           {
-            print_output("%c", s[k]);
+            print_output("      original_network_id: 0x%04X\n", READ_16BITS(s));
+            s += 2;
+            print_output("      transport_stream_id: 0x%04X\n", READ_16BITS(s));
+            s += 2;
+            print_output("      service_id: 0x%04X\n", READ_16BITS(s));
+            s += 2;
+          }
+          print_output("      component_tag: 0x%02X\n", s[0]);
+          s += 1;
+        }
+        else
+        {
+          unsigned selector_bytes_size = descriptor_length - 3;
+
+          /*
+          ** Other selector_bytes
+          */
+
+          print_output("      ");
+          for (k = 0; k < selector_bytes_size; k++)
+          {
+            print_output("%02X ", s[k]);
           }
           print_output("\n");
 
-          s += descriptor_length - 3;
+          s += selector_bytes_size;
         }
       }
       else if (0x15 == descriptor_tag)
       {
+        /*
+        ** Simple application location descriptor
+        */
+
         file_descriptor_length_position = s - 1;
 
         print_output("      ");
@@ -2363,7 +2613,8 @@ static bool_t parse_ait(uint8_t     *section,
         }
         print_output("\n");
 
-        if (NULL != new_ait->url.file) /* begining of patch */
+        /* Begining of file patch */
+        if (NULL != new_ait->url.file)
         {
           length_set_t length_set;
 
@@ -2374,7 +2625,7 @@ static bool_t parse_ait(uint8_t     *section,
           length_set.l4    = section_length;
 
           print_output("      replace by %s\n", new_ait->url.file);
-          patch_ait(section, s, new_ait->url.file, &length_set);
+          patch_ait_url(section, s, new_ait->url.file, &length_set);
           patch = TRUE;
 
           descriptor_length                   = length_set.patch;
@@ -2389,12 +2640,17 @@ static bool_t parse_ait(uint8_t     *section,
                        application_loop_length);
           write_12bits(section_length_position,
                        section_length);
-        } /* end of patch */
+        }
+        /* End of file patch */
 
         s += descriptor_length;
       }
-      else /* any other descriptor */
+      else
       {
+        /*
+        ** Other descriptors
+        */
+
         print_output("      ");
         for (k = 0; k < descriptor_length; k++)
         {
@@ -2709,8 +2965,9 @@ typedef enum
   REPLACE_PID,
   REPLACE_PROVIDER_NAME,
   REPLACE_TIME,
-  REPLACE_AIT_ID,
-  REPLACE_AIT_URL,
+  SET_AIT_ID,
+  SET_AIT_URL,
+  SET_AIT_DSMCC,
   DUPLICATE_PID,
   INSERT_PID,
   CRUSH_PID,
@@ -2762,8 +3019,9 @@ static const char *command_string[NB_COMMANDS] =
   "-rep-pid",
   "-rep-prov",
   "-rep-time",
-  "-rep-ait-id",
-  "-rep-ait-url",
+  "-set-ait-id",
+  "-set-ait-url",
+  "-set-ait-dsmcc",
   "-dup-pid",
   "-ins-pid",
   "-crush-pid",
@@ -2801,8 +3059,9 @@ typedef enum
   DECLARE_COMMAND_MASK(REPLACE_PID),
   DECLARE_COMMAND_MASK(REPLACE_PROVIDER_NAME),
   DECLARE_COMMAND_MASK(REPLACE_TIME),
-  DECLARE_COMMAND_MASK(REPLACE_AIT_ID),
-  DECLARE_COMMAND_MASK(REPLACE_AIT_URL),
+  DECLARE_COMMAND_MASK(SET_AIT_ID),
+  DECLARE_COMMAND_MASK(SET_AIT_URL),
+  DECLARE_COMMAND_MASK(SET_AIT_DSMCC),
   DECLARE_COMMAND_MASK(DUPLICATE_PID),
   DECLARE_COMMAND_MASK(INSERT_PID),
   DECLARE_COMMAND_MASK(CRUSH_PID),
@@ -3194,12 +3453,13 @@ static void parse_ts(const char        *filename,
       patch_level |= set_pid(packet, new_prog->video_pid) ? 1 : 0;
     }
     /*
-    ** Hard-code AIT.
+    ** Hard-code AIT
     */
     else if (pid == ait->pid &&
              (IS_ACTIVE(command, SHOW_AIT) ||
-              IS_ACTIVE(command, REPLACE_AIT_ID) ||
-              IS_ACTIVE(command, REPLACE_AIT_URL)))
+              IS_ACTIVE(command, SET_AIT_ID) ||
+              IS_ACTIVE(command, SET_AIT_URL) ||
+              IS_ACTIVE(command, SET_AIT_DSMCC)))
     {
       section = get_section(packet, FALSE, FALSE);
       patch_level |= parse_ait(section, ait, &section_length) ? 7 : 0;
@@ -3346,8 +3606,9 @@ static void show_usage(const char *name)
 
   print_user("\n");
   print_user("    special AIT\n");
-  print_user("    -rep-ait-id <app_id>\n");
-  print_user("    -rep-ait-url <url base> <url entry file name>\n");
+  print_user("    -set-ait-id    <app-id>\n");
+  print_user("    -set-ait-url   <url-base> <url-entry-file-name>\n");
+  print_user("    -set-ait-dsmcc <transport-prototcol-label>\n");
   print_user("\n");
   print_user("    special HLS\n");
   print_user("    -hls <duration>    split the input TS file into chunks of duration specified in seconds\n");
@@ -3358,7 +3619,7 @@ static uint32_t parse_args(int argc, char **argv,
                            prog_t      *sel_prog,
                            prog_t      *rep_prog,
                            service_t   *service,
-                           ait_t       *rep_ait,
+                           ait_t       *ait,
                            date_time_t *rep_time,
                            uint16_t    *pid1,
                            uint16_t    *pid2,
@@ -3481,10 +3742,15 @@ static uint32_t parse_args(int argc, char **argv,
         rep_prog->video_pid = atoi(value1);
         user_command |= COMMAND_MASK_REPLACE_VIDEO_PID;
       }
-      else if (IS_COMMAND(command, REPLACE_AIT_ID))
+      else if (IS_COMMAND(command, SET_AIT_ID))
       {
-        rep_ait->id = atoi(value1);
-        user_command |= COMMAND_MASK_REPLACE_AIT_ID;
+        ait->id = atoi(value1);
+        user_command |= COMMAND_MASK_SET_AIT_ID;
+      }
+      else if (IS_COMMAND(command, SET_AIT_DSMCC))
+      {
+        ait->tpl = atoi(value1);
+        user_command |= COMMAND_MASK_SET_AIT_DSMCC;
       }
       else if (IS_COMMAND(command, REPLACE_PROVIDER_NAME))
       {
@@ -3507,7 +3773,7 @@ static uint32_t parse_args(int argc, char **argv,
       }
       else if (IS_COMMAND(command, SHOW_AIT))
       {
-        rep_ait->pid = atoi(value1);
+        ait->pid = atoi(value1);
         user_command |= COMMAND_MASK_SHOW_AIT;
       }
       else if (IS_COMMAND(command, TOGGLE_TSC))
@@ -3529,11 +3795,11 @@ static uint32_t parse_args(int argc, char **argv,
         value2 = *argv++;
         i++;
 
-        if (IS_COMMAND(command, REPLACE_AIT_URL))
+        if (IS_COMMAND(command, SET_AIT_URL))
         {
-          rep_ait->url.base = value1;
-          rep_ait->url.file = value2;
-          user_command |= COMMAND_MASK_REPLACE_AIT_URL;
+          ait->url.base = value1;
+          ait->url.file = value2;
+          user_command |= COMMAND_MASK_SET_AIT_URL;
         }
         else if (IS_COMMAND(command, REPLACE_PID))
         {
@@ -3703,10 +3969,10 @@ static uint32_t parse_args(int argc, char **argv,
                service->name);
   }
 
-  if (INVALID_PID != rep_ait->pid)
+  if (INVALID_PID != ait->pid)
   {
     print_user("  - show AIT PID %d (0x%X)\n",
-               rep_ait->pid, rep_ait->pid);
+               ait->pid, ait->pid);
   }
 
   if (0 != (user_command & COMMAND_MASK_SHOW_PID))
@@ -3774,33 +4040,48 @@ static uint32_t parse_args(int argc, char **argv,
     }
   }
 
-  if (0 != (user_command & COMMAND_MASK_REPLACE_AIT_ID))
+  if (0 != (user_command & COMMAND_MASK_SET_AIT_ID))
   {
-    if (0 != rep_ait->id)
+    if (0 != ait->id)
     {
-      print_user("  - replace AIT ID by %d\n",
-                 rep_ait->id);
+      print_user("  - set AIT application ID to %d\n",
+                 ait->id);
     }
     else
     {
-      print_user("  - need to select an AIT PID to replace the ID, abort replacement\n");
-      init_ait(rep_ait);
-      user_command &= ~COMMAND_MASK_REPLACE_AIT_ID;
+      print_user("  - need to select an AIT PID to set the application ID, abort\n");
+      init_ait(ait);
+      user_command &= ~COMMAND_MASK_SET_AIT_ID;
     }
   }
 
-  if (0 != (user_command & COMMAND_MASK_REPLACE_AIT_URL))
+  if (0 != (user_command & COMMAND_MASK_SET_AIT_URL))
   {
-    if (INVALID_PID != rep_ait->pid)
+    if (INVALID_PID != ait->pid)
     {
-      print_user("  - replace AIT URL by %s %s\n",
-                 rep_ait->url.base, rep_ait->url.file);
+      print_user("  - set AIT URL to %s %s\n",
+                 ait->url.base, ait->url.file);
     }
     else
     {
-      print_user("  - need to select an AIT PID to replace the URL, abort replacement\n");
-      init_ait(rep_ait);
-      user_command &= ~COMMAND_MASK_REPLACE_AIT_URL;
+      print_user("  - need to select an AIT PID to set the URL, abort\n");
+      init_ait(ait);
+      user_command &= ~COMMAND_MASK_SET_AIT_URL;
+    }
+  }
+
+  else if (0 != (user_command & COMMAND_MASK_SET_AIT_DSMCC))
+  {
+    if (INVALID_PID != ait->pid)
+    {
+      print_user("  - set AIT transport protocol label to %d\n",
+                 ait->tpl);
+    }
+    else
+    {
+      print_user("  - need to select an AIT PID to set the DSMCC, abort\n");
+      init_ait(ait);
+      user_command &= ~COMMAND_MASK_SET_AIT_DSMCC;
     }
   }
 
