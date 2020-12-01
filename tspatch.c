@@ -2309,7 +2309,7 @@ static bool_t parse_ait(uint8_t     *section,
 
   if (show)
   {
-    print_output("AIT\n");
+    print_output("AIT on pid 0x%X (%u)\n", new_ait->pid, new_ait->pid);
     print_output("table_id: 0x%02X (%d)\n", table_id, table_id);
     if (TID_AIT != table_id)
     {
@@ -3117,6 +3117,15 @@ static void proceed_hls(const char    *filename,
 ** MAIN
 */
 
+#define PATCH_LEVEL_NONE            (0)
+#define PATCH_LEVEL_PACKET_ONLY     (1)
+#define PATCH_LEVEL_PACKET_AND_CRC  (3)
+#define PATCH_LEVEL_ALL             (7) /* PACKET_AND_CRC + VERSION_NUMBER */
+
+#define PATCH_VERSION(pl) (((pl) & 4) != 0)
+#define PATCH_CRC(pl)     (((pl) & 2) != 0)
+#define PATCH_PACKET(pl)  (((pl) & 1) != 0)
+
 typedef enum
 {
   SHOW_ALL_PID,
@@ -3346,7 +3355,7 @@ static void parse_ts(const char        *filename,
   while (0 == feof(file))
   {
     insertion = 0;
-    patch_level = 0;
+    patch_level = PATCH_LEVEL_NONE;
     rewind_file = FALSE;
 
     nb_bytes = fread(packet, 1, TS_PACKET_SIZE, file);
@@ -3470,7 +3479,8 @@ static void parse_ts(const char        *filename,
 
           if (IS_ACTIVE(command, REPLACE_TRANSPORT_STREAM_ID))
           {
-            patch_level |= patch_pat_header(&pat_header, target_prog, new_prog, section) ? 7 : 0;
+            patch_level |= patch_pat_header(&pat_header, target_prog, new_prog, section)
+                         ? PATCH_LEVEL_ALL : PATCH_LEVEL_NONE;
           }
 
           if (INVALID_PID != target_prog->pmt_pid)
@@ -3490,7 +3500,8 @@ static void parse_ts(const char        *filename,
             if (IS_ACTIVE(command, REPLACE_PROGRAM_NUMBER) ||
                 IS_ACTIVE(command, REPLACE_PMT_PID))
             {
-              patch_level |= patch_pat_program(&pat_header, target_prog, new_prog, (uint8_t*)payload) ? 7 : 0;
+              patch_level |= patch_pat_program(&pat_header, target_prog, new_prog, (uint8_t*)payload)
+                           ? PATCH_LEVEL_ALL : PATCH_LEVEL_NONE;
             }
           }
         }
@@ -3539,14 +3550,17 @@ static void parse_ts(const char        *filename,
 
             if (IS_ACTIVE(command, REPLACE_PROGRAM_NUMBER))
             {
-              patch_level |= patch_pmt_header(&pmt_header, target_prog, new_prog, (uint8_t*)section) ? 7 : 0;
+              patch_level |= patch_pmt_header(&pmt_header, target_prog, new_prog, (uint8_t*)section)
+                           ? PATCH_LEVEL_ALL : PATCH_LEVEL_NONE;
             }
 
             if (IS_ACTIVE(command, REPLACE_PCR_PID) ||
                 IS_ACTIVE(command, REPLACE_AUDIO_PID) ||
-                IS_ACTIVE(command, REPLACE_VIDEO_PID))
+                IS_ACTIVE(command, REPLACE_VIDEO_PID) ||
+                IS_ACTIVE(command, REPLACE_ES_PID))
             {
-              patch_level |= patch_pmt_es(&pmt_header, target_prog, new_prog, (uint8_t*)payload) ? 7 : 0;
+              patch_level |= patch_pmt_es(&pmt_header, target_prog, new_prog, (uint8_t*)payload)
+                           ? PATCH_LEVEL_ALL : PATCH_LEVEL_NONE;
             }
           }
         }
@@ -3554,7 +3568,8 @@ static void parse_ts(const char        *filename,
 
       if (IS_ACTIVE(command, REPLACE_PMT_PID))
       {
-        patch_level |= set_pid(packet, new_prog->pmt_pid) ? 1 : 0;
+        patch_level |= set_pid(packet, new_prog->pmt_pid)
+                     ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
       }
     }
     else if (pid == PID_SDT)
@@ -3577,7 +3592,8 @@ static void parse_ts(const char        *filename,
 
           if (IS_ACTIVE(command, REPLACE_PROVIDER_NAME))
           {
-            patch_level |= patch_sdt_provider_name(&sdt_header, service, section, &section_length) ? 7 : 0;
+            patch_level |= patch_sdt_provider_name(&sdt_header, service, section, &section_length)
+                         ? PATCH_LEVEL_ALL : PATCH_LEVEL_NONE;
           }
         }
       }
@@ -3606,7 +3622,10 @@ static void parse_ts(const char        *filename,
             next_time.year = start_time->year;
 #endif
 
-            patch_level |= patch_utc_time(section, &utc_time, &next_time) ? utc_time.offset == 0 ? 1 : 3 : 0;
+            patch_level |= patch_utc_time(section, &utc_time, &next_time)
+                         ? utc_time.offset == 0
+                         ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_PACKET_AND_CRC : PATCH_LEVEL_NONE;
+            /* Note: TDT has no version number */
 
             prev_utc_time = utc_time;
           }
@@ -3620,17 +3639,20 @@ static void parse_ts(const char        *filename,
     else if (pid == target_prog->pcr_pid &&
              IS_ACTIVE(command, REPLACE_PCR_PID))
     {
-      patch_level |= set_pid(packet, new_prog->pcr_pid) ? 1 : 0;
+      patch_level |= set_pid(packet, new_prog->pcr_pid)
+                   ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
     }
     else if (pid == target_prog->audio_pid &&
              IS_ACTIVE(command, REPLACE_AUDIO_PID))
     {
-      patch_level |= set_pid(packet, new_prog->audio_pid) ? 1 : 0;
+      patch_level |= set_pid(packet, new_prog->audio_pid)
+                   ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
     }
     else if (pid == target_prog->video_pid &&
              IS_ACTIVE(command, REPLACE_VIDEO_PID))
     {
-      patch_level |= set_pid(packet, new_prog->video_pid) ? 1 : 0;
+      patch_level |= set_pid(packet, new_prog->video_pid)
+                   ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
     }
     /*
     ** Hard-code AIT
@@ -3642,7 +3664,9 @@ static void parse_ts(const char        *filename,
               IS_ACTIVE(command, SET_AIT_DSMCC)))
     {
       section = get_section(packet, FALSE, FALSE);
-      patch_level |= parse_ait(section, ait, &section_length) ? 7 : 0;
+      patch_level |= parse_ait(section, ait, &section_length)
+                   ? PATCH_LEVEL_PACKET_AND_CRC : PATCH_LEVEL_NONE;
+      /* Dont want to increment the version number in this case */
     }
 
     /*
@@ -3652,28 +3676,31 @@ static void parse_ts(const char        *filename,
     {
       if (IS_ACTIVE(command, REPLACE_PID))
       {
-        patch_level |= set_pid(packet, pid2) ? 1 : 0;
+        patch_level |= set_pid(packet, pid2)
+                     ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
       }
       else if (IS_ACTIVE(command, DUPLICATE_PID))
       {
         memcpy(&packet[TS_PACKET_SIZE], &packet[0], TS_PACKET_SIZE);
-        insertion = set_pid(&packet[TS_PACKET_SIZE], pid2) ? 1 : 0;
+        insertion = set_pid(&packet[TS_PACKET_SIZE], pid2) ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
       }
       else if (IS_ACTIVE(command, INSERT_PID))
       {
-        insertion = get_next_unique_pid_packet(ups_file, packet + TS_PACKET_SIZE) ? 1 : 0;
+        insertion = get_next_unique_pid_packet(ups_file, packet + TS_PACKET_SIZE) ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
       }
       else if (IS_ACTIVE(command, CRUSH_PID))
       {
-        patch_level |= get_next_unique_pid_packet(ups_file, packet) ? 1 : 0;
+        patch_level |= get_next_unique_pid_packet(ups_file, packet)
+                     ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
       }
     }
     if (pid == tsc_pid && IS_ACTIVE(command, TOGGLE_TSC))
     {
-      patch_level |= toggle_tsc_bits(packet) ? 1 : 0;
+      patch_level |= toggle_tsc_bits(packet)
+                   ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
     }
 
-    if ((patch_level & 4) != 0)
+    if (PATCH_VERSION(patch_level))
     {
       /*
       ** Change section version number
@@ -3681,7 +3708,7 @@ static void parse_ts(const char        *filename,
       increment_version_number(section);
     }
 
-    if ((patch_level & 2) != 0)
+    if (PATCH_CRC(patch_level))
     {
       /*
       ** Update CRC
@@ -3699,7 +3726,7 @@ static void parse_ts(const char        *filename,
       assert((TS_PACKET_SIZE * (1 + insertion)) == nb_bytes);
       fflush(new_file);
     }
-    else if ((patch_level & 1) != 0)
+    else if (PATCH_PACKET(patch_level))
     {
       /*
       ** Rewind file for one TS packet & Write back packet into file
@@ -4409,7 +4436,7 @@ int main(int argc, char **argv)
       return 0;
     }
 
-    print_user("new file %p\n", new_file);
+    print_debug("new file %p\n", new_file);
   }
   else
   {
@@ -4451,7 +4478,6 @@ int main(int argc, char **argv)
 
     // Now, the temp file becomes the main file
 
-/*
     if (0 != remove(filename))
     {
       print_user("remove %s failed\n", filename);
@@ -4461,7 +4487,6 @@ int main(int argc, char **argv)
     {
       print_user("rename %s to %s failed\n", new_filename, filename);
     }
-*/
   }
 
   print_user("%s end\n", toolname);
