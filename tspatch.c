@@ -42,6 +42,8 @@ typedef unsigned long  uint32_t;
 #define WRITE_12BITS(p,v)   ()
 #define WRITE_08BITS(p,v)   ()
 
+#define SMART_TABLE_SHOW
+
 /****************************/
 /*** MACROS & TYPES: MPEG ***/
 /****************************/
@@ -273,30 +275,50 @@ static void init_ait(ait_t *ait)
 #define print_output printf
 #define print_user   printf
 
-static void dump_buffer(const uint8_t *buffer,
-                        unsigned       size,
-                        const char    *comment)
+static char get_printable_character(uint8_t c)
+{
+  if (0x20 <= c && c < 0x7F)
+  {
+    return c;
+  }
+
+  return '.';
+}
+
+static void print_string(const char    *header,
+                         const uint8_t *buffer,
+                         unsigned       size)
 {
   unsigned i;
 
-  print_output("\nDUMP BUFFER (%s)\n", comment);
+  if (header != NULL)
+  {
+    print_output("%s", header);
+  }
+  for (i = 0; i < size; i++)
+  {
+    print_output("%c", get_printable_character(buffer[i]));
+  }
+  print_output("\n");
+}
+
+static void print_buffer(const char    *header,
+                         const uint8_t *buffer,
+                         unsigned       size)
+{
+  unsigned i;
+
+  if (header != NULL)
+  {
+    print_output("%s", header);
+  }
   for (i = 0; i < size; i++)
   {
     print_output("%02X ", buffer[i]);
   }
   print_output("\n");
-  for (i = 0; i < size; i++)
-  {
-    if (0x20 <= buffer[i] && buffer[i] < 0x7F)
-    {
-      print_output("%c", buffer[i]);
-    }
-    else
-    {
-      print_output(".");
-    }
-  }
-  print_output("\n");
+
+  print_string(header, buffer, size);
 }
 
 /************/
@@ -1856,10 +1878,10 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
         */
         remaining_len -= service_provider_name_length;
         memcpy(buffer, spn + service_provider_name_length, remaining_len);
-        //dump_buffer(buffer, remaining_len, "saved section remaining");
+        //print_buffer("BUFFER: saved section remaining\n", buffer, remaining_len);
         memcpy(spn, new_svc->name, strlen(new_svc->name));
         memcpy(spn + strlen(new_svc->name), buffer, remaining_len);
-        //dump_buffer(section, TS_PACKET_SIZE - 4, "before length fields patches");
+        //print_buffer("BUFFER: before length fields patches\n", section, TS_PACKET_SIZE - 4);
 
         /*
         ** Update all length fields
@@ -1899,7 +1921,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
           sl[0]  = (sl[0] & 0xF0) | ((*section_length >> 8) & 0x0F);
           sl[1]  = *section_length & 0xFF;
         }
-        //dump_buffer(section, TS_PACKET_SIZE - 4, "after length fields patches");
+        //print_buffer("BUFFER: after length fields patches\n", section, TS_PACKET_SIZE - 4);
 
         return TRUE;
       }
@@ -2114,7 +2136,7 @@ static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
   static
   uint8_t  buffer[TS_PACKET_SIZE - 4];       /* temporary buffer where the section is stored */
 
-  //dump_buffer(s1, 184, "before ait patch");
+  //print_buffer("BUFFER: before ait patch\n", s1, 184);
 
   new_url_len = strlen(new_url);
   index = s2 - s1 + len->patch;              /* end of replaced string position */
@@ -2144,7 +2166,7 @@ static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
 
   len->patch = new_url_len;
 
-  //dump_buffer(s1, 184, "after ait patch");
+  //print_buffer("BUFFER: after ait patch\n", s1, 184);
 }
 
 static bool_t parse_ait(uint8_t     *section,
@@ -2197,6 +2219,7 @@ static bool_t parse_ait(uint8_t     *section,
   uint8_t  l;
   bool_t   heavy_patch;
   bool_t   patch = FALSE;
+  bool_t   show;
 
   table_id = s[0]; s++;
   section_length_position = s;
@@ -2214,9 +2237,11 @@ static bool_t parse_ait(uint8_t     *section,
 
   real_section_length = section_length + 3;
 
-  if (version_number != previous_version_number)
+  show = version_number != previous_version_number;
+
+  if (show)
   {
-    print_output("\nAIT\n");
+    print_output("AIT\n");
     print_output("table_id: 0x%02X (%d)\n", table_id, table_id);
     if (TID_AIT != table_id)
     {
@@ -2236,7 +2261,7 @@ static bool_t parse_ait(uint8_t     *section,
     organisation_id = READ_32BITS(s); s += 4;
     application_id = ((uint16_t)s[0] << 8) | s[1]; s += 2;
 
-    if (version_number != previous_version_number)
+    if (show)
     {
       print_output("  organisation_id: 0x%08X (%lu)\n",
                    organisation_id, organisation_id);
@@ -2264,7 +2289,7 @@ static bool_t parse_ait(uint8_t     *section,
 
     i += 9;
 
-    if (version_number != previous_version_number)
+    if (show)
     {
       print_output("    application_control_code: 0x%02X (%s)\n",
                     application_control_code, get_ait_application_control_code(application_control_code));
@@ -2276,7 +2301,7 @@ static bool_t parse_ait(uint8_t     *section,
     {
       heavy_patch = FALSE;
 
-      if (version_number != previous_version_number)
+      if (show)
       {
         print_output("\n");
       }
@@ -2288,7 +2313,7 @@ static bool_t parse_ait(uint8_t     *section,
       i += 2;
       j += 2;
 
-      if (version_number != previous_version_number)
+      if (show)
       {
         print_output("      descriptor_tag: 0x%02X (%s)\n",
                      descriptor_tag, get_ait_descriptor_tag(descriptor_tag));
@@ -2304,7 +2329,7 @@ static bool_t parse_ait(uint8_t     *section,
 
         application_profiles_length = s[0]; s++;
 
-        if (version_number != previous_version_number)
+        if (show)
         {
           print_output("      application_profiles_length: 0x%02X (%u)\n",
                        application_profiles_length, application_profiles_length);
@@ -2313,7 +2338,7 @@ static bool_t parse_ait(uint8_t     *section,
         for (k = 0; k < application_profiles_length / 5; k++)
         {
           application_profile = (((uint16_t)s[0]) << 8) | s[1]; s += 2;
-          if (version_number != previous_version_number)
+          if (show)
           {
             print_output("      profile %u: 0x%04X (%d)\n", k + 1,
                          application_profile, application_profile);
@@ -2327,7 +2352,7 @@ static bool_t parse_ait(uint8_t     *section,
         visibility = (s[0] & 0x60) >> 5; s += 1;
         application_priority = s[0]; s += 1;
 
-        if (version_number != previous_version_number)
+        if (show)
         {
           print_output("      service_bound_flag: %u\n",
                        service_bound_flag);
@@ -2345,7 +2370,7 @@ static bool_t parse_ait(uint8_t     *section,
         for (k = 0; k < l; k++)
         {
           transport_protocol_label = s[0]; s += 1;
-          if (version_number != previous_version_number)
+          if (show)
           {
             print_output("      transport_protocol_label %d: 0x%02X (%u)\n", k + 1,
                          transport_protocol_label, transport_protocol_label);
@@ -2379,7 +2404,7 @@ static bool_t parse_ait(uint8_t     *section,
         {
           for (k = 0; k < descriptor_length; )
           {
-            if (version_number != previous_version_number)
+            if (show)
             {
               print_output("      (%c%c%c) ",
                            s[0], s[1], s[2]);
@@ -2388,13 +2413,9 @@ static bool_t parse_ait(uint8_t     *section,
 
             application_name_length = s[0]; s += 1;
 
-            if (version_number != previous_version_number)
+            if (show)
             {
-              for (l = 0; l < application_name_length; l++)
-              {
-                print_output("%c", s[l]);
-              }
-              print_output("\n");
+              print_string(NULL, s, application_name_length);
             }
 
             k += 4;
@@ -2412,7 +2433,7 @@ static bool_t parse_ait(uint8_t     *section,
         protocol_id = (((uint16_t)s[0]) << 8) | s[1]; s += 2;
         transport_protocol_label = s[0]; s += 1;
 
-        if (version_number != previous_version_number)
+        if (show)
         {
           print_output("      protocol_id: 0x%04X (%s)\n",
                        protocol_id,
@@ -2436,7 +2457,7 @@ static bool_t parse_ait(uint8_t     *section,
 
               /*
               ** TODO: use the more modern patch_section function
-              **       isntead of antic patch_ait
+              **       instead of antic patch_ait
               */
 
               length_set.patch = URL_base_length;
@@ -2549,7 +2570,7 @@ static bool_t parse_ait(uint8_t     *section,
         }
         else
         {
-          if (version_number != previous_version_number)
+          if (show)
           {
             print_output("      transport_protocol_label: 0x%02X (%u)\n",
                          transport_protocol_label, transport_protocol_label);
@@ -2597,14 +2618,9 @@ static bool_t parse_ait(uint8_t     *section,
 
           if (URL_base_length > 0)
           { 
-            if (version_number != previous_version_number)
+            if (show)
             {
-              print_output("      URL base: ");
-              for (k = 0; k < URL_base_length; k++)
-              {
-                print_output("%c", s[k]);
-              }
-              print_output("\n");
+              print_string("      URL base: ", s, URL_base_length);
             }
 
             s += URL_base_length;
@@ -2616,15 +2632,10 @@ static bool_t parse_ait(uint8_t     *section,
           {
             URL_extension_length = s[0]; s += 1;
 
-            if (version_number != previous_version_number)
+            if (show)
             {
               print_output("      URL extension %d: ", k + 1);
-
-              for (l = 0; l < URL_extension_length; l++)
-              {
-                print_output("%c", s[l]);
-              }
-              print_output("\n");
+              print_string(NULL, s, URL_extension_length);
             }
 
             s += URL_extension_length;
@@ -2634,14 +2645,14 @@ static bool_t parse_ait(uint8_t     *section,
         {
           unsigned remote_connection = s[0] & 0x80 ? 1 : 0; s += 1;
 
-          if (version_number != previous_version_number)
+          if (show)
           {
             print_output("      remote_connection: %u\n", remote_connection);
           }
 
           if (remote_connection == 1)
           {
-            if (version_number != previous_version_number)
+            if (show)
             {
               print_output("      original_network_id: 0x%04X\n", READ_16BITS(s));
               print_output("      transport_stream_id: 0x%04X\n", READ_16BITS(s));
@@ -2649,7 +2660,7 @@ static bool_t parse_ait(uint8_t     *section,
             }
             s += 6;
           }
-          if (version_number != previous_version_number)
+          if (show)
           {
             print_output("      component_tag: 0x%02X\n", s[0]);
           }
@@ -2663,14 +2674,9 @@ static bool_t parse_ait(uint8_t     *section,
           ** Other selector_bytes
           */
 
-          if (version_number != previous_version_number)
+          if (show)
           {
-            print_output("      ");
-            for (k = 0; k < selector_bytes_size; k++)
-            {
-              print_output("%02X ", s[k]);
-            }
-            print_output("\n");
+            print_buffer("      ", s, selector_bytes_size);
           }
 
           s += selector_bytes_size;
@@ -2684,14 +2690,9 @@ static bool_t parse_ait(uint8_t     *section,
 
         file_descriptor_length_position = s - 1;
 
-        if (version_number != previous_version_number)
+        if (show)
         {
-          print_output("      ");
-          for (k = 0; k < descriptor_length; k++)
-          {
-            print_output("%c", s[k]);
-          }
-          print_output("\n");
+          print_string("      ", s, descriptor_length);
         }
 
         /* Begining of file patch */
@@ -2701,7 +2702,7 @@ static bool_t parse_ait(uint8_t     *section,
 
           /*
           ** TODO: use the more modern patch_section function
-          **       isntead of antic patch_ait
+          **       instead of antic patch_ait
           */
 
           length_set.patch = descriptor_length;
@@ -2737,27 +2738,9 @@ static bool_t parse_ait(uint8_t     *section,
         ** Other descriptors
         */
 
-        if (version_number != previous_version_number)
+        if (show)
         {
-          print_output("      ");
-          for (k = 0; k < descriptor_length; k++)
-          {
-            print_output("%02X ", s[k]);
-          }
-          print_output("\n");
-          print_output("      ");
-          for (k = 0; k < descriptor_length; k++)
-          {
-            if (20 <= s[k] && s[k] <= 255)
-            {
-              print_output("%c", s[k]);
-            }
-            else
-            {
-              print_output(".");
-            }
-          }
-          print_output("\n");
+          print_buffer("      ", s, descriptor_length);
         }
 
         s += descriptor_length;
@@ -2770,7 +2753,14 @@ static bool_t parse_ait(uint8_t     *section,
 
   *length = section_length;
 
+#ifdef SMART_TABLE_SHOW
   previous_version_number = version_number;
+#endif
+
+  if (show)
+  {
+    print_output("\n");
+  }
 
   return patch;
 }
@@ -3602,9 +3592,9 @@ static void parse_ts(const char        *filename,
       */
       section_length += SECTION_HEADER_SIZE;
       section_length -= SECTION_CRC_SIZE;
-      //dump_buffer(section, section_length + SECTION_CRC_SIZE, "before CRC update");
+      //print_buffer("BUFFER: before CRC update\n", section, section_length + SECTION_CRC_SIZE);
       update_crc32(section, section_length);
-      //dump_buffer(section, section_length + SECTION_CRC_SIZE, "after CRC update");
+      //print_buffer("BUFFER: after CRC update\n", section, section_length + SECTION_CRC_SIZE);
     }
 
     if (new_file != NULL)
