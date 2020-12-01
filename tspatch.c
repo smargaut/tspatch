@@ -184,28 +184,40 @@ static void init_prog(prog_t *prog)
 #define TID_TOT                     (0x73)
 #define TID_AIT                     (0x74)
 
-#define TAG_NETWORK_NAME_DESCRIPTOR              (0x40)
-#define TAG_SERVICE_LIST_DESCRIPTOR              (0x41)
-#define TAG_STUFFING_DESCRIPTOR                  (0x42)
-#define TAG_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR (0x43)
-#define TAG_CABLE_DELIVERY_SYSTEM_DESCRIPTOR     (0x44)
-#define TAG_VBI_DATA_DESCRIPTOR                  (0x45)
-#define TAG_VBI_TELETEXT_DESCRIPTOR              (0x46)
-#define TAG_BOUQUET_NAME_DESCRIPTOR              (0x47)
-#define TAG_SERVICE_DESCRIPTOR                   (0x48)
-#define TAG_COUNTRY_AVAILABILITY_DESCRIPTOR      (0x49)
-#define TAG_LINKAGE_DESCRIPTOR                   (0x4A)
-#define TAG_NVOD_REFERENCE_DESCRIPTOR            (0x4B)
-#define TAG_TIME_SHIFTED_SERVICE_DESCRIPTOR      (0x4C)
-#define TAG_SHORT_EVENT_DESCRIPTOR               (0x4D)
-#define TAG_EXTENDED_EVENT_DESCRIPTOR            (0x4E)
-#define TAG_TIME_SHIFTED_EVENT_DESCRIPTOR        (0x4F)
-#define TAG_COMPONENT_DESCRIPTOR                 (0x50)
-#define TAG_MOSAIC_DESCRIPTOR                    (0x51)
-#define TAG_STREAM_IDENTIFIER_DESCRIPTOR         (0x52)
-#define TAG_CA_IDENTIFIER_DESCRIPTOR             (0x53)
-#define TAG_CONTENT_DESCRIPTOR                   (0x54)
-#define TAG_MULTILINGUAL_SERVICE_NAME_DESCRIPTOR (0x5D)
+#define DESCRIPTOR_TAG_VIDEO_STREAM                 (0x02)
+#define DESCRIPTOR_TAG_AUDIO_STREAM                 (0x03)
+#define DESCRIPTOR_TAG_HIERARCHY                    (0x04)
+#define DESCRIPTOR_TAG_REGISTRATION                 (0x05)
+#define DESCRIPTOR_TAG_DATA_STREAM_ALIGNMENT        (0x06)
+#define DESCRIPTOR_TAG_TARGET_BACKGROUND_GRID       (0x07)
+#define DESCRIPTOR_TAG_VIDEO_WINDOW                 (0x08)
+#define DESCRIPTOR_TAG_CA                           (0x09)
+#define DESCRIPTOR_TAG_ISO_639_LANGUAGE             (0x0A)
+#define DESCRIPTOR_TAG_SYSTEM_CLOCK                 (0x0B)
+#define DESCRIPTOR_TAG_MULTIPLEX_BUFFER_UTILIZATION (0x0C)
+#define DESCRIPTOR_TAG_NETWORK_NAME                 (0x40)
+#define DESCRIPTOR_TAG_SERVICE_LIST                 (0x41)
+#define DESCRIPTOR_TAG_STUFFING                     (0x42)
+#define DESCRIPTOR_TAG_SATELLITE_DELIVERY_SYSTEM    (0x43)
+#define DESCRIPTOR_TAG_CABLE_DELIVERY_SYSTEM        (0x44)
+#define DESCRIPTOR_TAG_VBI_DATA                     (0x45)
+#define DESCRIPTOR_TAG_VBI_TELETEXT                 (0x46)
+#define DESCRIPTOR_TAG_BOUQUET_NAME                 (0x47)
+#define DESCRIPTOR_TAG_SERVICE                      (0x48)
+#define DESCRIPTOR_TAG_COUNTRY_AVAILABILITY         (0x49)
+#define DESCRIPTOR_TAG_LINKAGE                      (0x4A)
+#define DESCRIPTOR_TAG_NVOD_REFERENCE               (0x4B)
+#define DESCRIPTOR_TAG_TIME_SHIFTED_SERVICE         (0x4C)
+#define DESCRIPTOR_TAG_SHORT_EVENT                  (0x4D)
+#define DESCRIPTOR_TAG_EXTENDED_EVENT               (0x4E)
+#define DESCRIPTOR_TAG_TIME_SHIFTED_EVENT           (0x4F)
+#define DESCRIPTOR_TAG_COMPONENT                    (0x50)
+#define DESCRIPTOR_TAG_MOSAIC                       (0x51)
+#define DESCRIPTOR_TAG_STREAM_IDENTIFIER            (0x52)
+#define DESCRIPTOR_TAG_CA_IDENTIFIER                (0x53)
+#define DESCRIPTOR_TAG_CONTENT                      (0x54)
+#define DESCRIPTOR_TAG_MULTILINGUAL_SERVICE_NAME    (0x5D)
+#define DESCRIPTOR_TAG_APPLICATION_SIGNALLING       (0x6F)
 /*
 ** TODO: complete this list
 */
@@ -1009,17 +1021,41 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
 
   switch (descriptor_tag)
   {
-  case TAG_NETWORK_NAME_DESCRIPTOR:              name = "NETWORK_NAME";              break;
-  case TAG_SERVICE_LIST_DESCRIPTOR:              name = "SERVICE_LIST";              break;
-  case TAG_STUFFING_DESCRIPTOR:                  name = "STUFFING";                  break;
-  case TAG_SATELLITE_DELIVERY_SYSTEM_DESCRIPTOR: name = "SATELLITE_DELIVERY_SYSTEM"; break;
-  case TAG_CABLE_DELIVERY_SYSTEM_DESCRIPTOR:     name = "CABLE_DELIVERY_SYSTEM";     break;
-  case TAG_VBI_DATA_DESCRIPTOR:                  name = "VBI_DATA";                  break;
-  case TAG_VBI_TELETEXT_DESCRIPTOR:              name = "VBI_TELETEXT";              break;
-  case TAG_BOUQUET_NAME_DESCRIPTOR:              name = "BOUQUET_NAME";              break;
-  case TAG_SERVICE_DESCRIPTOR:                   name = "SERVICE";                   break;
-  case TAG_MULTILINGUAL_SERVICE_NAME_DESCRIPTOR: name = "MULTILINGUAL_SERVICE_NAME"; break;
-  default:                                       name = "UNKNOWN";                   break;
+  case DESCRIPTOR_TAG_VIDEO_STREAM:                 name = "VIDEO_STREAM";                 break;
+  case DESCRIPTOR_TAG_AUDIO_STREAM:                 name = "AUDIO_STREAM";                 break;
+  case DESCRIPTOR_TAG_HIERARCHY:                    name = "HIERARCHY";                    break;
+  case DESCRIPTOR_TAG_REGISTRATION:                 name = "REGISTRATION";                 break;
+  case DESCRIPTOR_TAG_DATA_STREAM_ALIGNMENT:        name = "DATA_STREAM_ALIGNMENT";        break;
+  case DESCRIPTOR_TAG_TARGET_BACKGROUND_GRID:       name = "TARGET_BACKGROUND_GRID";       break;
+  case DESCRIPTOR_TAG_VIDEO_WINDOW:                 name = "VIDEO_WINDOW";                 break;
+  case DESCRIPTOR_TAG_CA:                           name = "CA";                           break;
+  case DESCRIPTOR_TAG_ISO_639_LANGUAGE:             name = "ISO_639_LANGUAGE";             break;
+  case DESCRIPTOR_TAG_SYSTEM_CLOCK:                 name = "SYSTEM_CLOCK";                 break;
+  case DESCRIPTOR_TAG_MULTIPLEX_BUFFER_UTILIZATION: name = "MULTIPLEX_BUFFER_UTILIZATION"; break;
+  case DESCRIPTOR_TAG_NETWORK_NAME:                 name = "NETWORK_NAME";                 break;
+  case DESCRIPTOR_TAG_SERVICE_LIST:                 name = "SERVICE_LIST";                 break;
+  case DESCRIPTOR_TAG_STUFFING:                     name = "STUFFING";                     break;
+  case DESCRIPTOR_TAG_SATELLITE_DELIVERY_SYSTEM:    name = "SATELLITE_DELIVERY_SYSTEM";    break;
+  case DESCRIPTOR_TAG_CABLE_DELIVERY_SYSTEM:        name = "CABLE_DELIVERY_SYSTEM";        break;
+  case DESCRIPTOR_TAG_VBI_DATA:                     name = "VBI_DATA";                     break;
+  case DESCRIPTOR_TAG_VBI_TELETEXT:                 name = "VBI_TELETEXT";                 break;
+  case DESCRIPTOR_TAG_BOUQUET_NAME:                 name = "BOUQUET_NAME";                 break;
+  case DESCRIPTOR_TAG_SERVICE:                      name = "SERVICE";                      break;
+  case DESCRIPTOR_TAG_MULTILINGUAL_SERVICE_NAME:    name = "MULTILINGUAL_SERVICE_NAME";    break;
+  case DESCRIPTOR_TAG_COUNTRY_AVAILABILITY:         name = "COUNTRY_AVAILABILITY";         break;
+  case DESCRIPTOR_TAG_LINKAGE:                      name = "LINKAGE";                      break;
+  case DESCRIPTOR_TAG_NVOD_REFERENCE:               name = "NVOD_REFERENCE";               break;
+  case DESCRIPTOR_TAG_TIME_SHIFTED_SERVICE:         name = "TIME_SHIFTED_SERVICE";         break;
+  case DESCRIPTOR_TAG_SHORT_EVENT:                  name = "SHORT_EVENT";                  break;
+  case DESCRIPTOR_TAG_EXTENDED_EVENT:               name = "EXTENDED_EVENT";               break;
+  case DESCRIPTOR_TAG_TIME_SHIFTED_EVENT:           name = "TIME_SHIFTED_EVENT";           break;
+  case DESCRIPTOR_TAG_COMPONENT:                    name = "COMPONENT";                    break;
+  case DESCRIPTOR_TAG_MOSAIC:                       name = "MOSAIC";                       break;
+  case DESCRIPTOR_TAG_STREAM_IDENTIFIER:            name = "STREAM_IDENTIFIER";            break;
+  case DESCRIPTOR_TAG_CA_IDENTIFIER:                name = "CA_IDENTIFIER";                break;
+  case DESCRIPTOR_TAG_CONTENT:                      name = "CONTENT";                      break;
+  case DESCRIPTOR_TAG_APPLICATION_SIGNALLING:       name = "APPLICATION_SIGNALLING";       break;
+  default:                                          name = "UNKNOWN";                      break;
   }
 
   return name;
@@ -1362,6 +1398,8 @@ static unsigned get_type(uint8_t stream_type)
   return OTHER_TYPE;
 }
 
+static void print_application_signalling_descriptor(const uint8_t *descriptor);
+
 static const uint8_t *get_pmt_payload(const uint8_t *section,
                                       pmt_header_t  *header)
 {
@@ -1408,8 +1446,7 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
 
   header->number_of_es = 0;
 
-  for (first_es = es = section + PMT_INFO_OFFSET + header->program_info_length;
-       es < crc; ) 
+  for (first_es = es = section + PMT_INFO_OFFSET + header->program_info_length; es < crc; ) 
   {
     header->number_of_es++;
 
@@ -1544,13 +1581,20 @@ static uint16_t get_first_pid(const pmt_header_t *header,
 }
 
 static void show_pmt(const pmt_header_t *header,
-                     const uint8_t      *es)
+                     const uint8_t      *es,
+                     uint16_t           ait_pid)
 {
   unsigned i;
   unsigned n;
+  unsigned len;
   uint16_t elementary_pid;
   uint16_t info_length;
   uint8_t  stream_type;
+  uint8_t  descriptor_tag;
+  uint8_t  descriptor_length;
+
+  const uint8_t *descriptor;
+  const uint8_t *app = NULL;
 
   print_output("PMT version 0x%02X (%u) for program 0x%02X (%u) has %d elementary streams\n",
                header->version_number, header->version_number,
@@ -1570,8 +1614,32 @@ static void show_pmt(const pmt_header_t *header,
                  elementary_pid, elementary_pid,
                  stream_type, get_stream_type_name(stream_type));
 
+    for (len  = 0,                 descriptor = &es[5];
+         len  < info_length;
+         len += descriptor_length, descriptor += 2 + descriptor_length)
+    {
+      descriptor_tag = descriptor[0];
+      descriptor_length = descriptor[1];
+      print_output("          descriptor tag 0x%02X (%s) is %u bytes long\n",
+                   descriptor_tag, get_descriptor_name(descriptor_tag),
+                   descriptor_length);
+
+      if (ait_pid != INVALID_PID &&
+          elementary_pid == ait_pid &&
+          stream_type == 5 &&
+          descriptor_tag == DESCRIPTOR_TAG_APPLICATION_SIGNALLING)
+      {
+        app = descriptor;
+      }
+    }
+
     es += PMT_MINIMUM_ES_SIZE;
     es += info_length;
+  }
+
+  if (app != NULL)
+  {
+    print_application_signalling_descriptor(app);
   }
 }
 
@@ -1747,7 +1815,7 @@ static void show_sdt(const sdt_header_t *header,
 
       service += SDT_DESCRIPTOR_MINIMUM_SIZE;
 
-      if (TAG_SERVICE_DESCRIPTOR == descriptor_tag)
+      if (DESCRIPTOR_TAG_SERVICE == descriptor_tag)
       {
         service_type = service[0];
         service_provider_name_length = service[1];
@@ -1765,7 +1833,7 @@ static void show_sdt(const sdt_header_t *header,
         print_output("          %s\n",
                      name);
       }
-      else if (TAG_MULTILINGUAL_SERVICE_NAME_DESCRIPTOR == descriptor_tag)
+      else if (DESCRIPTOR_TAG_MULTILINGUAL_SERVICE_NAME == descriptor_tag)
       {
       }
 
@@ -1851,7 +1919,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
       service += SDT_DESCRIPTOR_MINIMUM_SIZE;
       remaining_len -= SDT_DESCRIPTOR_MINIMUM_SIZE;
 
-      if (TAG_SERVICE_DESCRIPTOR == descriptor_tag)
+      if (DESCRIPTOR_TAG_SERVICE == descriptor_tag)
       {
         service_provider_name_length = service[1];
         remaining_len -= 2;
@@ -2381,7 +2449,7 @@ static bool_t parse_ait(uint8_t     *section,
         if (NULL == new_ait->url.base && INVALID_BYTE != new_ait->tpl && l > 0)
         {
           transport_protocol_label = s[0];
-          print_output("      change first transport_protocol_label to 0x%02 in %s (old was 0x%02)\n",
+          print_output("      * change first transport_protocol_label to 0x%02X in %s (old was 0x%02X)\n",
                        new_ait->tpl,
                        get_ait_descriptor_tag(descriptor_tag),
                        transport_protocol_label);
@@ -2466,7 +2534,7 @@ static bool_t parse_ait(uint8_t     *section,
               length_set.l3    = application_loop_length;
               length_set.l4    = section_length;
 
-              print_output("      set URL %s\n", new_ait->url.base);
+              print_output("      * set URL %s\n", new_ait->url.base);
               print_output("      transport_protocol_label: 0x%02X (%u)\n",
                            transport_protocol_label, transport_protocol_label);
               patch_ait_url(section, s + 1, new_ait->url.base, &length_set);
@@ -2490,7 +2558,7 @@ static bool_t parse_ait(uint8_t     *section,
             /* Patch whole selector_bytes to make it HTTP */
 
             protocol_id = 3;
-            print_output("      change protocol_id to 0x%04X\n", protocol_id);
+            print_output("      * change protocol_id to 0x%04X\n", protocol_id);
             print_output("      transport_protocol_label: 0x%02X (%u)\n",
                          transport_protocol_label, transport_protocol_label);
             s -= 3;
@@ -2525,7 +2593,7 @@ static bool_t parse_ait(uint8_t     *section,
           {
             /* Just patch Carousel ID */
 
-            print_output("      change transport_protocol_label to 0x%02 (old was 0x%02)\n",
+            print_output("      * change transport_protocol_label to 0x%02X (old was 0x%02X)\n",
                          new_ait->tpl, transport_protocol_label);
             transport_protocol_label = new_ait->tpl;
             s -= 3;
@@ -2539,9 +2607,9 @@ static bool_t parse_ait(uint8_t     *section,
             /* Patch whole selector_bytes to make it OC */
 
             protocol_id = 1;
-            print_output("      change protocol_id to 0x%04X\n",
+            print_output("      * change protocol_id to 0x%04X\n",
                          protocol_id);
-            print_output("      and change transport_protocol_label to 0x%02 (old was 0x%02)\n",
+            print_output("      * change transport_protocol_label to 0x%02X (old was 0x%02X)\n",
                          new_ait->tpl, transport_protocol_label);
             transport_protocol_label = new_ait->tpl;
             s -= 3;
@@ -2763,6 +2831,34 @@ static bool_t parse_ait(uint8_t     *section,
   }
 
   return patch;
+}
+
+static void print_application_signalling_descriptor(const uint8_t *descriptor)
+{
+  uint16_t type;
+  uint8_t  tag;
+  uint8_t  number;
+  uint8_t  length;
+  uint8_t  l;
+
+  tag = *descriptor++;
+  length = *descriptor++;
+
+  if (tag == DESCRIPTOR_TAG_APPLICATION_SIGNALLING)
+  {
+    print_output("\nApplication Signalling Descriptor (length = %u)\n", length);
+    for (l = 0; l < length; l += 3, descriptor += 3)
+    {
+      type = ((((uint16_t)descriptor[0]) << 8) & 0x7F) | (uint16_t)descriptor[1];
+      number = descriptor[2] & 0x1F;
+
+      print_output("  - application_type: 0x%04X (%s)\n",
+                   type, get_ait_application_type(type));
+      print_output("  - AIT_version_number: 0x%02X (%u)\n",
+                   number, number);
+      print_output("\n");
+    }
+  }
 }
 
 /*
@@ -3415,7 +3511,7 @@ static void parse_ts(const char        *filename,
               pmt_header.program_number == target_prog->number &&
               pmt_header.version_number != pmt_version_number))
           {
-            show_pmt(&pmt_header, payload);
+            show_pmt(&pmt_header, payload, ait->pid);
             pmt_version_number = pmt_header.version_number;
           }
 
@@ -3666,6 +3762,7 @@ static void show_usage(const char *name)
   print_user("    -show-all-pmt      display all PMTs of selected program (limited interest)\n");
   print_user("    -show-sdt          display the SDT\n");
   print_user("    -show-ait <pid>    display the AIT identified by its PID\n");
+  print_user("                       also select the AIT PID for -set-ait- commands below\n");
   print_user("\n");
   print_user("    file patching commands\n");
   print_user("    -rep-tsid <tsid>   replace transport stream id by new one\n");
@@ -4078,7 +4175,7 @@ static uint32_t parse_args(int argc, char **argv,
 
   if (INVALID_PID != ait->pid)
   {
-    print_user("  - show AIT PID 0x%X (%u)\n",
+    print_user("  - show & select AIT PID 0x%X (%u)\n",
                ait->pid, ait->pid);
   }
 
@@ -4181,7 +4278,7 @@ static uint32_t parse_args(int argc, char **argv,
   {
     if (INVALID_PID != ait->pid)
     {
-      print_user("  - set AIT transport protocol label to 0x%X (%u)\n",
+      print_user("  - set AIT to DSMCC with transport protocol label set to 0x%X (%u)\n",
                  ait->tpl, ait->tpl);
     }
     else
