@@ -1192,7 +1192,8 @@ static void show_pat(const pat_header_t *header,
   uint16_t program_number;
   uint16_t pid;
 
-  print_output("PAT version %d of TSid %d (0x%X) has %d programs\n", 
+  print_output("PAT version 0x%02X (%u) of TSid 0x%X (%u) has %d programs\n",
+               header->version_number,
                header->version_number,
                header->transport_stream_id,
                header->transport_stream_id,
@@ -1209,13 +1210,13 @@ static void show_pat(const pat_header_t *header,
 
     if (0 == program_number)
     {
-      print_output("  %d- network pid %d (0x%04X)\n",
+      print_output("  %d- network pid 0x%04X (%u)\n",
                    i + 1,
                    pid, pid);
     }
     else
     {
-      print_output("  %d- program %d (0x%04X) pid %d (0x%04X)\n",
+      print_output("  %d- program 0x%04X (%u) pid 0x%04X (%u)\n",
                    i + 1,
                    program_number, program_number,
                    pid, pid);
@@ -1507,22 +1508,20 @@ static void show_pmt(const pmt_header_t *header,
   uint16_t info_length;
   uint8_t  stream_type;
 
-  print_output("PMT version %d (0x%02X) for program %d (0x%02X) has %d elementary streams\n", 
+  print_output("PMT version 0x%02X (%u) for program 0x%02X (%u) has %d elementary streams\n",
                header->version_number, header->version_number,
                header->program_number, header->program_number,
                header->number_of_es);
 
   n = header->number_of_es;
 
-  for (i = 0;
-       i < n;
-       i++) 
+  for (i = 0; i < n; i++)
   {
     stream_type = es[0];
     elementary_pid = (((uint16_t)(es[1] & 0x1F)) << 8) | es[2];
     info_length = (((uint16_t)(es[3] & 0x0F)) << 8) | es[4];
 
-    print_output("  %d- type 0x%02X (%s) pid %d (0x%02X)\n",
+    print_output("  %d- type 0x%02X (%s) pid 0x%02X (%u)\n",
                  i + 1,
                  stream_type,
                  get_stream_type_name(stream_type),
@@ -1671,7 +1670,8 @@ static void show_sdt(const sdt_header_t *header,
   uint8_t     service_provider_name_length;
   uint8_t     service_name_length;
 
-  print_output("SDT version %d of TSid %d (0x%X) and ONId %d (0x%X) has %d services\n", 
+  print_output("SDT version 0x%02X (%u) of TSid 0x%X (%u) and ONId 0x%X (%u) has %d services\n",
+               header->version_number,
                header->version_number,
                header->transport_stream_id,
                header->transport_stream_id,
@@ -1686,7 +1686,7 @@ static void show_sdt(const sdt_header_t *header,
     descriptors_loop_length = (((uint16_t)(service[3] & 0x0F)) << 8)
                             | service[4];
 
-    print_output("    - service %d (0x%X)\n",
+    print_output("    - service 0x%X (%u)\n",
                  service_id,
                  service_id);
 
@@ -1697,7 +1697,7 @@ static void show_sdt(const sdt_header_t *header,
       descriptor_tag = service[0];
       descriptor_length = service[1];
 
-      print_output("        - %s tag: %d (0x%X)\n",
+      print_output("        - %s tag: 0x%X (%u)\n",
                    get_descriptor_name(descriptor_tag),
                    descriptor_tag,
                    descriptor_tag);
@@ -2218,24 +2218,24 @@ static bool_t parse_ait(uint8_t     *section,
   */
 
   print_output("\nAIT\n");
-  print_output("table_id: %d (0x%02X)\n", table_id, table_id);
+  print_output("table_id: 0x%02X (%d)\n", table_id, table_id);
   if (TID_AIT != table_id)
   {
     print_output("table_id WARNING: different from 0x%02X\n", TID_AIT);
   }
-  print_output("section_length: %d (0x%02X)\n", section_length, section_length);
-  print_output("application_type: 0x%02X (%s)\n", application_type, get_ait_application_type(application_type));
-  print_output("version_number: %d (0x%02X)\n", version_number, version_number);
-  print_output("section_number: %d (0x%02X)\n", section_number, section_number);
-  print_output("last_section_number: %d (0x%02X)\n", last_section_number, last_section_number);
-  print_output("common_descriptors_length: %d (0x%02X)\n", common_descriptors_length, common_descriptors_length);
-  print_output("application_loop_length: %d (0x%02X)\n", application_loop_length, application_loop_length);
+  print_output("section_length: 0x%02X (%u)\n", section_length, section_length);
+  print_output("application_type: 0x%03X (%s)\n", application_type, get_ait_application_type(application_type));
+  print_output("version_number: 0x%02X (%u)\n", version_number, version_number);
+  print_output("section_number: 0x%02X (%u)\n", section_number, section_number);
+  print_output("last_section_number: 0x%02X (%u)\n", last_section_number, last_section_number);
+  print_output("common_descriptors_length: 0x%03X (%u)\n", common_descriptors_length, common_descriptors_length);
+  print_output("application_loop_length: 0x%03X (%u)\n", application_loop_length, application_loop_length);
 
   for (i = 0; i < application_loop_length; )
   {
-    print_output("  organisation_id: %lu (0x%02X%02X%02X%02X)\n",
-                 READ_32BITS(s),
-                 s[0], s[1], s[2], s[3]); s += 4;
+    print_output("  organisation_id: 0x%02X%02X%02X%02X (%lu)\n",
+                 s[0], s[1], s[2], s[3],
+                 READ_32BITS(s)); s += 4;
     application_id = ((uint16_t)s[0] << 8) | s[1]; s += 2;
     print_output("  application_id: 0x%04X (%s)\n",
                  application_id, get_ait_application_use(application_id));
@@ -2261,7 +2261,7 @@ static bool_t parse_ait(uint8_t     *section,
 
     print_output("    application_control_code: 0x%02X (%s)\n",
                   application_control_code, get_ait_application_control_code(application_control_code));
-    print_output("    application_descriptors_loop_length: %d (0x%02X)\n",
+    print_output("    application_descriptors_loop_length: 0x%03X (%u)\n",
                  application_descriptors_loop_length, application_descriptors_loop_length);
 
     for (j = 0; j < application_descriptors_loop_length; )
@@ -2279,7 +2279,8 @@ static bool_t parse_ait(uint8_t     *section,
 
       print_output("      descriptor_tag: 0x%02X (%s)\n",
                    descriptor_tag, get_ait_descriptor_tag(descriptor_tag));
-      print_output("      descriptor_length: %d (0x%02X)\n", descriptor_length, descriptor_length);
+      print_output("      descriptor_length: 0x%02X (%u)\n",
+                   descriptor_length, descriptor_length);
 
       if (0x00 == descriptor_tag)
       {
@@ -2289,15 +2290,15 @@ static bool_t parse_ait(uint8_t     *section,
 
         application_profiles_length = s[0]; s++;
 
-        print_output("      application_profiles_length: %d (0x%02X)\n",
+        print_output("      application_profiles_length: 0x%02X (%u)\n",
                      application_profiles_length, application_profiles_length);
 
         for (k = 0; k < application_profiles_length / 5; k++)
         {
           application_profile = (((uint16_t)s[0]) << 8) | s[1]; s += 2;
-          print_output("      profile %d: %d (0x%02X)\n", k,
+          print_output("      profile %u: 0x%04X (%d)\n", k + 1,
                        application_profile, application_profile);
-          print_output("        version: %d.%d.%d\n",
+          print_output("        version: %u.%u.%u\n",
                        s[0], s[1], s[2]);
           s += 3;
         }
@@ -2306,11 +2307,11 @@ static bool_t parse_ait(uint8_t     *section,
         visibility = (s[0] & 0x60) >> 5; s += 1;
         application_priority = s[0]; s += 1;
 
-        print_output("      service_bound_flag: %d\n",
+        print_output("      service_bound_flag: %u\n",
                      service_bound_flag);
-        print_output("      visibility: %d\n",
+        print_output("      visibility: %u\n",
                      visibility);
-        print_output("      application_priority: %d (0x%02X)\n",
+        print_output("      application_priority: 0x%02X (%u)\n",
                      application_priority, application_priority);
 
         l  = descriptor_length;
@@ -2321,7 +2322,7 @@ static bool_t parse_ait(uint8_t     *section,
         for (k = 0; k < l; k++)
         {
           transport_protocol_label = s[0]; s += 1;
-          print_output("      transport_protocol_label %d: %d (0x%02X)\n", k,
+          print_output("      transport_protocol_label %d: 0x%02X (%u)\n", k + 1,
                        transport_protocol_label, transport_protocol_label);
         }
       }
@@ -2393,7 +2394,7 @@ static bool_t parse_ait(uint8_t     *section,
               length_set.l4    = section_length;
 
               print_output("      set URL %s\n", new_ait->url.base);
-              print_output("      transport_protocol_label: %d (0x%02X)\n",
+              print_output("      transport_protocol_label: 0x%02X (%u)\n",
                            transport_protocol_label, transport_protocol_label);
               patch_ait_url(section, s + 1, new_ait->url.base, &length_set);
               patch = TRUE;
@@ -2417,7 +2418,7 @@ static bool_t parse_ait(uint8_t     *section,
 
             protocol_id = 3;
             print_output("      but change to 0x%04X\n", protocol_id);
-            print_output("      transport_protocol_label: %d (0x%02X)\n",
+            print_output("      transport_protocol_label: 0x%02X (%u)\n",
                          transport_protocol_label, transport_protocol_label);
             s -= 3;
             s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
@@ -2496,12 +2497,16 @@ static bool_t parse_ait(uint8_t     *section,
         }
         else
         {
-          print_output("      transport_protocol_label: %d (0x%02X)\n",
+          print_output("      transport_protocol_label: 0x%02X (%u)\n",
                        transport_protocol_label, transport_protocol_label);
         }
 
         if (heavy_patch)
         {
+          /*
+          ** Heavy patch means that all lenghts need to be re-adjusted
+          */
+
           if (new_selector_bytes_size > old_selector_bytes_size)
           {
             selector_bytes_size_diff = new_selector_bytes_size - old_selector_bytes_size;
@@ -2564,21 +2569,16 @@ static bool_t parse_ait(uint8_t     *section,
         }
         else if (1 == protocol_id) /* Object Carousel */
         {
-          unsigned remote_connection = s[0] & 0x80 ? 1 : 0;
-          s += 1;
+          unsigned remote_connection = s[0] & 0x80 ? 1 : 0; s += 1;
 
-          print_output("      remote_connection: %d\n", remote_connection);
+          print_output("      remote_connection: %u\n", remote_connection);
           if (remote_connection == 1)
           {
-            print_output("      original_network_id: 0x%04X\n", READ_16BITS(s));
-            s += 2;
-            print_output("      transport_stream_id: 0x%04X\n", READ_16BITS(s));
-            s += 2;
-            print_output("      service_id: 0x%04X\n", READ_16BITS(s));
-            s += 2;
+            print_output("      original_network_id: 0x%04X\n", READ_16BITS(s)); s += 2;
+            print_output("      transport_stream_id: 0x%04X\n", READ_16BITS(s)); s += 2;
+            print_output("      service_id: 0x%04X\n", READ_16BITS(s)); s += 2;
           }
-          print_output("      component_tag: 0x%02X\n", s[0]);
-          s += 1;
+          print_output("      component_tag: 0x%02X\n", s[0]); s += 1;
         }
         else
         {
