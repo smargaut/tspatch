@@ -216,8 +216,15 @@ static void init_prog(prog_t *prog)
 #define DESCRIPTOR_TAG_STREAM_IDENTIFIER            (0x52)
 #define DESCRIPTOR_TAG_CA_IDENTIFIER                (0x53)
 #define DESCRIPTOR_TAG_CONTENT                      (0x54)
+#define DESCRIPTOR_TAG_SUBTITLING                   (0x59)
 #define DESCRIPTOR_TAG_MULTILINGUAL_SERVICE_NAME    (0x5D)
+#define DESCRIPTOR_TAG_DATA_BROADCAST               (0x64)
+#define DESCRIPTOR_TAG_SCRAMBLING                   (0x65)
+#define DESCRIPTOR_TAG_DATA_BROADCAST_ID            (0x66)
+#define DESCRIPTOR_TAG_TRANSPORT_STREAM             (0x67)
 #define DESCRIPTOR_TAG_APPLICATION_SIGNALLING       (0x6F)
+#define DESCRIPTOR_TAG_ENHANCED_AC3                 (0x7A)
+#define DESCRIPTOR_TAG_EXTENSION                    (0x7F)
 /*
 ** TODO: complete this list
 */
@@ -279,6 +286,8 @@ static void init_ait(ait_t *ait)
 /*
 ** TODO: review, fix and improve trace handling (this is very prehistoric)
 **       also, add -v -vv -vvv options to command line
+**
+**       really, review log levels, it's a real mess
 */
 
 #define print_error  printf
@@ -1054,7 +1063,15 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
   case DESCRIPTOR_TAG_STREAM_IDENTIFIER:            name = "STREAM_IDENTIFIER";            break;
   case DESCRIPTOR_TAG_CA_IDENTIFIER:                name = "CA_IDENTIFIER";                break;
   case DESCRIPTOR_TAG_CONTENT:                      name = "CONTENT";                      break;
+  case DESCRIPTOR_TAG_SUBTITLING:                   name = "SUBTITLING";                   break;
+  case DESCRIPTOR_TAG_DATA_BROADCAST:               name = "DATA_BROADCAST";               break;
+  case DESCRIPTOR_TAG_SCRAMBLING:                   name = "SCRAMBLING";                   break;
+  case DESCRIPTOR_TAG_DATA_BROADCAST_ID:            name = "DATA_BROADCAST_ID";            break;
+  case DESCRIPTOR_TAG_TRANSPORT_STREAM:             name = "TRANSPORT_STREAM";             break;
   case DESCRIPTOR_TAG_APPLICATION_SIGNALLING:       name = "APPLICATION_SIGNALLING";       break;
+  case DESCRIPTOR_TAG_ENHANCED_AC3:                 name = "ENHANCED_AC3";                 break;
+  case DESCRIPTOR_TAG_EXTENSION:                    name = "EXTENSION";                    break;
+  case 0xFF:                                        name = "FORBIDDEN";                    break;
   default:                                          name = "UNKNOWN";                      break;
   }
 
@@ -2437,7 +2454,7 @@ static bool_t parse_ait(uint8_t     *section,
 
         for (k = 0; k < l; k++)
         {
-          transport_protocol_label = s[0]; s += 1;
+          transport_protocol_label = s[k];
           if (show)
           {
             print_output("      transport_protocol_label %d: 0x%02X (%u)\n", k + 1,
@@ -2446,21 +2463,21 @@ static bool_t parse_ait(uint8_t     *section,
         }
 
         /* Begining of transport patch */
-        if (NULL == new_ait->url.base && INVALID_BYTE != new_ait->tpl && l > 0)
+        if (NULL == new_ait->url.base &&
+            INVALID_BYTE != new_ait->tpl &&
+            l > 0)
         {
           transport_protocol_label = s[0];
-          print_output("      * change first transport_protocol_label to 0x%02X in %s (old was 0x%02X)\n",
-                       new_ait->tpl,
-                       get_ait_descriptor_tag(descriptor_tag),
-                       transport_protocol_label);
+          print_output("      * change first transport_protocol_label to 0x%02X (old was 0x%02X) in descriptor 0x%X\n",
+                       new_ait->tpl, transport_protocol_label, descriptor_tag);
           transport_protocol_label = new_ait->tpl;
-          s -= l;
           s[0] = new_ait->tpl;
-          s += l;
 
           patch = TRUE;
         }
         /* End of transport patch */
+
+        s += l;
       }
       else if (0x01 == descriptor_tag)
       {
@@ -2508,6 +2525,8 @@ static bool_t parse_ait(uint8_t     *section,
                        (1 == protocol_id) ? "Object Carousel" :
                        (3 == protocol_id) ? "HTTP" :
                        "unexpected");
+          print_output("      transport_protocol_label: 0x%02X (%u)\n",
+                       transport_protocol_label, transport_protocol_label);
         }
 
         /* Begining of transport patch */
@@ -2535,8 +2554,6 @@ static bool_t parse_ait(uint8_t     *section,
               length_set.l4    = section_length;
 
               print_output("      * set URL %s\n", new_ait->url.base);
-              print_output("      transport_protocol_label: 0x%02X (%u)\n",
-                           transport_protocol_label, transport_protocol_label);
               patch_ait_url(section, s + 1, new_ait->url.base, &length_set);
               patch = TRUE;
 
@@ -2559,8 +2576,6 @@ static bool_t parse_ait(uint8_t     *section,
 
             protocol_id = 3;
             print_output("      * change protocol_id to 0x%04X\n", protocol_id);
-            print_output("      transport_protocol_label: 0x%02X (%u)\n",
-                         transport_protocol_label, transport_protocol_label);
             s -= 3;
             s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
             s[1] = (uint8_t)((protocol_id >> 0) & 0xFF);
@@ -2593,8 +2608,8 @@ static bool_t parse_ait(uint8_t     *section,
           {
             /* Just patch Carousel ID */
 
-            print_output("      * change transport_protocol_label to 0x%02X (old was 0x%02X)\n",
-                         new_ait->tpl, transport_protocol_label);
+            print_output("      * change transport_protocol_label to 0x%02X (old was 0x%02X) in descriptor 0x%X\n",
+                         new_ait->tpl, transport_protocol_label, descriptor_tag);
             transport_protocol_label = new_ait->tpl;
             s -= 3;
             s[2] = transport_protocol_label;
@@ -2609,8 +2624,8 @@ static bool_t parse_ait(uint8_t     *section,
             protocol_id = 1;
             print_output("      * change protocol_id to 0x%04X\n",
                          protocol_id);
-            print_output("      * change transport_protocol_label to 0x%02X (old was 0x%02X)\n",
-                         new_ait->tpl, transport_protocol_label);
+            print_output("      * change transport_protocol_label to 0x%02X (old was 0x%02X) in descriptor 0x%X\n",
+                         new_ait->tpl, transport_protocol_label, descriptor_tag);
             transport_protocol_label = new_ait->tpl;
             s -= 3;
             s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
@@ -2638,11 +2653,9 @@ static bool_t parse_ait(uint8_t     *section,
         }
         else
         {
-          if (show)
-          {
-            print_output("      transport_protocol_label: 0x%02X (%u)\n",
-                         transport_protocol_label, transport_protocol_label);
-          }
+          /*
+          ** No patch here
+          */
         }
 
         if (heavy_patch)
@@ -2865,48 +2878,95 @@ static void print_application_signalling_descriptor(const uint8_t *descriptor)
 ** Unique PID stream
 */
 
+static bool_t goto_first_packet(FILE *file);
+
 static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 {
   static uint16_t unique_pid = INVALID_PID;
   static uint16_t second_pid = INVALID_PID;
-  static bool_t invalid_pid_message = FALSE;
+  static unsigned position   = INVALID_BYTE;
+  static bool_t   fatal_message = FALSE;
+  static bool_t   issue_message = FALSE;
+  static bool_t   invalid_pid_message = FALSE;
 
   uint16_t pid;
   size_t   nb_bytes;
   int      ret;
   bool_t   success = TRUE;
 
-  // call goto_first_packet the first time ?
+  if (INVALID_BYTE == position)
+  {
+    /* Find first TS packet of unique PID stream */
+
+    position = goto_first_packet(file);
+    if (INVALID_BYTE == position)
+    {
+      if (! fatal_message)
+      {
+        print_user("%s: unique PID stream id not a TS file !\n",
+                   __FUNCTION__);
+        fatal_message = TRUE;
+      }
+      return FALSE;
+    }
+  }
 
   do
   {
-    if (feof(file))
+    if (feof(file) != 0)
     {
-      ret = fseek(file, 0, SEEK_SET);
-      assert(0 == ret);
+      /* Reached EOF for unique PID stream */
 
       if (unique_pid == INVALID_PID)
       {
-        print_user("%s: the unique PID stream does not contain any valid PID\n",
-                   __FUNCTION__);
+        /* If not PID has been found, then no need to continue */
+
+        if (! fatal_message)
+        {
+          print_user("%s: unique PID stream does not contain any valid PID !\n",
+                     __FUNCTION__);
+          fatal_message = TRUE;
+        }
         success = FALSE;
         break;
       }
+
+      /* Go back to first TS packet position */
+      ret = fseek(file, position, SEEK_SET);
+      assert(0 == ret);
     }
 
     nb_bytes = fread(packet, 1, TS_PACKET_SIZE, file);
     if (TS_PACKET_SIZE != nb_bytes)
     {
-      print_info("%s: truncated packet in unique PID stream\n",
-                 __FUNCTION__);
+      if (feof(file) != 0)
+      {
+        /* If EOF, then go back to beginning of file */
+        pid = INVALID_PID;
+        continue;
+      }
+
+      /* If not EOF, then the problem is more serious */
+      if (! issue_message)
+      {
+        print_user("%s: reading error in unique PID stream\n",
+                   __FUNCTION__);
+        issue_message = TRUE;
+      }
+      position = INVALID_BYTE; // try to restart from beginning next time
       success = FALSE;
       break;
     }
 
-    if (packet[0] == TS_SYNCHRO_BYTE)
+    if (packet[0] != TS_SYNCHRO_BYTE)
     {
-      print_info("%s: disynchronization in unique PID stream\n",
-                 __FUNCTION__);
+      if (! issue_message)
+      {
+        print_user("%s: disynchronization in unique PID stream\n",
+                   __FUNCTION__);
+        issue_message = TRUE;
+      }
+      position = INVALID_BYTE; // try to restart from beginning next time
       success = FALSE;
       break;
     }
@@ -2916,8 +2976,8 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! invalid_pid_message)
       {
-        print_debug("%s: found %u (0x%X) in unique PID stream !\n",
-                   __FUNCTION__, pid, pid);
+        print_user("%s: unique PID stream contains invalid pid\n",
+                   __FUNCTION__);
         invalid_pid_message = TRUE;
       }
       continue;
@@ -2925,7 +2985,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 
     if (unique_pid == INVALID_PID)
     {
-      print_debug("%s: unique PID is %u (0x%X)\n",
+      print_user("%s: unique PID is 0x%X (%u)\n",
                  __FUNCTION__, pid, pid);
       unique_pid = pid;
       continue;
@@ -2934,8 +2994,8 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     if (pid != unique_pid && second_pid == INVALID_PID)
     {
       print_user("%s: the unique PID stream was supposed to contain one unique PID only\n");
-      print_user("%s: but found at least two, %u (0x%X) and %u (0x%X), will keep %u (0x%X) only\n",
-                 __FUNCTION__, unique_pid, unique_pid, pid, pid, unique_pid, unique_pid);
+      print_user("%s: but found at least two, 0x%X (%u) and 0x%X (%u), will keep 0x%X only\n",
+                 __FUNCTION__, unique_pid, unique_pid, pid, pid, unique_pid);
       second_pid = pid;
       continue;
     }
@@ -3259,29 +3319,36 @@ typedef enum
 
 } command_mask_t;
 
-static bool_t goto_first_packet(FILE *file)
+static unsigned goto_first_packet(FILE *file)
 {
-  size_t   nb_bytes;
+  unsigned pos;
   int      ret;
-  unsigned i;
+  size_t   nb;
   char     c;
 
-  for (i = 0;
-       i < TS_PACKET_SIZE;
-       i++)
-  {
-    nb_bytes = fread(&c, 1, 1, file);
-    assert(1 == nb_bytes);
+  ret = fseek(file, 0, SEEK_SET);
+  assert(0 == ret);
 
-    if (TS_SYNCHRO_BYTE == c)
+  for (pos = 0; pos < TS_PACKET_SIZE; pos++)
+  {
+    nb = fread(&c, 1, 1, file);
+//    if (nb != 1 || feof(file) != 0);
+    if (nb != 1)
+    {
+      /* Reaching EOF while seeking first packet should not happen */
+      print_info("EOF while seeking first packet\n");
+      break;
+    }
+
+    if (c == TS_SYNCHRO_BYTE)
     {
       ret = fseek(file, -1, SEEK_CUR);
       assert(0 == ret);
-      return TRUE;
+      return pos;
     }
   }
 
-  return FALSE;
+  return INVALID_BYTE;
 }
 
 /*
@@ -3336,10 +3403,10 @@ static void parse_ts(const char        *filename,
 
   init_prog(&first_prog);
 
-  if (FALSE == goto_first_packet(file))
+  if (INVALID_BYTE == goto_first_packet(file))
   {
-    print_info("%s: not a TS file\n",
-               __FUNCTION__);
+    print_info("%s: %s is not a TS file\n",
+               __FUNCTION__, filename);
     return;
   }
 
@@ -3682,16 +3749,17 @@ static void parse_ts(const char        *filename,
       else if (IS_ACTIVE(command, DUPLICATE_PID))
       {
         memcpy(&packet[TS_PACKET_SIZE], &packet[0], TS_PACKET_SIZE);
-        insertion = set_pid(&packet[TS_PACKET_SIZE], pid2) ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
+        insertion = set_pid(&packet[TS_PACKET_SIZE], pid2) ? 1 : 0;
       }
       else if (IS_ACTIVE(command, INSERT_PID))
       {
-        insertion = get_next_unique_pid_packet(ups_file, packet + TS_PACKET_SIZE) ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
+        insertion = get_next_unique_pid_packet(ups_file, packet + TS_PACKET_SIZE) ? 1 : 0;
       }
       else if (IS_ACTIVE(command, CRUSH_PID))
       {
         patch_level |= get_next_unique_pid_packet(ups_file, packet)
                      ? PATCH_LEVEL_PACKET_ONLY : PATCH_LEVEL_NONE;
+        set_pid(packet, pid1);
       }
     }
     if (pid == tsc_pid && IS_ACTIVE(command, TOGGLE_TSC))
@@ -4478,6 +4546,9 @@ int main(int argc, char **argv)
 
     // Now, the temp file becomes the main file
 
+#if 0 // disabled temporarily
+      // TODO: enable me
+
     if (0 != remove(filename))
     {
       print_user("remove %s failed\n", filename);
@@ -4487,6 +4558,7 @@ int main(int argc, char **argv)
     {
       print_user("rename %s to %s failed\n", new_filename, filename);
     }
+#endif
   }
 
   print_user("%s end\n", toolname);
