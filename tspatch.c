@@ -7,9 +7,13 @@
 
 #include <libgen.h> /* for basename */
 
-/*
-** TODO: add versioning
-*/
+/***************/
+/*** VERSION ***/
+/***************/
+
+/* Change it every commit                          */
+/* Question: is it possible to retrieve git info ? */
+#define TOOL_VERSION "1.00"
 
 /*******************/
 /*** COMPILATION ***/
@@ -31,22 +35,26 @@ typedef unsigned char  uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned long  uint32_t;
 
+#define READ_32BITS(p)      (((((uint32_t)(p)[0]) << 24) | (((uint32_t)(p)[1]) << 16) | (((uint32_t)(p)[2]) << 8) | ((uint32_t)(p)[3])) & 0xFFFFFFFF)
+#define READ_24BITS(p)      ((                             (((uint32_t)(p)[0]) << 16) | (((uint32_t)(p)[1]) << 8) | ((uint32_t)(p)[2])) & 0x00FFFFFF)
+#define READ_16BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0xFFFF)
+#define READ_15BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0x7FFF)
+#define READ_13BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0x1FFF)
+#define READ_12BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0x0FFF)
+#define READ_08BITS(p)      ((                                                                                      ((uint16_t)(p)[0])) & 0xFF)
+#define READ_VERSION(p)     ((((p)[0]) & 0x3E) >> 1)
 /*
-** TODO: complete and use these macros
+** TODO: develop and use these macros
 */
-#define READ_32BITS(p)      ((((uint32_t)(p)[0]) << 24) | (((uint32_t)(p)[1]) << 16) | (((uint32_t)(p)[2]) << 8) | (((uint32_t)(p)[3]) << 0))
-#define READ_16BITS(p)      ((((uint16_t)(*(p))<<8)&0xFF00) | (uint16_t)*((p)+1))
-#define READ_12BITS(p)      ((((uint16_t)(*(p))<<8)&0x0F00) | (uint16_t)*((p)+1))
-#define READ_08BITS(p)      (*(p))
 #define WRITE_16BITS(p,v)   ()
 #define WRITE_12BITS(p,v)   ()
 #define WRITE_08BITS(p,v)   ()
 
-#define SMART_TABLE_SHOW
-
 /****************************/
 /*** MACROS & TYPES: MPEG ***/
 /****************************/
+
+#define SMART_TABLE_SHOW
 
 #define NB_MAX_ES_IN_PMT 20
 #define PMT_INFO_MAX_SIZE 1
@@ -64,6 +72,24 @@ typedef unsigned long  uint32_t;
 #define TID_PAT (0x00)
 #define TID_CAT (0x01)
 #define TID_PMT (0x02)
+
+#define STREAM_TYPE_11172_2_VIDEO                          (0x01)
+#define STREAM_TYPE_13818_2_VIDEO                          (0x02)
+#define STREAM_TYPE_11172_3_AUDIO                          (0x03)
+#define STREAM_TYPE_13818_3_AUDIO                          (0x04)
+#define STREAM_TYPE_13818_1_PRIVATE_SECTIONS               (0x05)
+#define STREAM_TYPE_13818_1_PES_PACKETS_WITH_PRIVATE_DATA  (0x06)
+#define STREAM_TYPE_13522_MHEG                             (0x07)
+#define STREAM_TYPE_DSMCC                                  (0x08)
+#define STREAM_TYPE_H222_1                                 (0x09)
+#define STREAM_TYPE_13818_6_TYPE_A                         (0x0A)
+#define STREAM_TYPE_13818_6_TYPE_B                         (0x0B)
+#define STREAM_TYPE_13818_6_TYPE_C                         (0x0C)
+#define STREAM_TYPE_13818_6_TYPE_D                         (0x0D)
+#define STREAM_TYPE_13818_1_AUXILIARY                      (0x0E)
+#define STREAM_TYPE_AUDIO_ADTS                             (0x0F)
+#define STREAM_TYPE_AUDIO_LATM                             (0x11)
+#define STREAM_TYPE_H264                                   (0x1B)
 
 #define DESCRIPTOR_TAG_VIDEO_STREAM                    (0x02)
 #define DESCRIPTOR_TAG_AUDIO_STREAM                    (0x03)
@@ -525,7 +551,7 @@ static uint16_t get_pid(const uint8_t *packet)
     return INVALID_PID;
   }
 
-  return (((uint16_t)(packet[1] & 0x1F)) << 8) | packet[2];
+  return READ_13BITS(&packet[1]);
 }
 
 static bool_t set_pid(uint8_t *packet, uint16_t pid)
@@ -662,29 +688,7 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
   /* Go to section */
   packet += pointer_field;
 
-  if (dump)
-  {
-    /*
-    ** TODO: use print_buffer or dump_buffer function
-    */
-    print_debug("%s: dump %s section\n",
-                __FUNCTION__,
-                get_section_name(pid, packet[0]));
-    print_debug("%s:      %02X %02X %02X %02X %02X %02X %02X %02X\n",
-                __FUNCTION__,
-                packet[0], packet[1], packet[2], packet[3],
-                packet[4], packet[5], packet[6], packet[7]);
-    print_debug("%s:      %02X %02X %02X %02X %02X %02X %02X %02X\n",
-                __FUNCTION__,
-                packet[8], packet[9], packet[10], packet[11],
-                packet[12], packet[13], packet[14], packet[15]);
-    print_debug("%s:      %02X %02X %02X %02X %02X %02X %02X %02X\n",
-                __FUNCTION__,
-                packet[16], packet[17], packet[18], packet[19],
-                packet[20], packet[21], packet[22], packet[23]);
-  }
-
-  section_length = (((uint16_t)(packet[1] & 0x0F)) << 8) | packet[2];
+  section_length = READ_12BITS(&packet[1]);
   if (section_length > 1024)
   {
     if (! try)
@@ -692,6 +696,11 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
       print_error("%s: invalid section length\n", __FUNCTION__);
     }
     return NULL;
+  }
+
+  if (dump)
+  {
+    dump_buffer(get_section_name(pid, packet[0]), packet, section_length + 3);
   }
 
   if (try)
@@ -1009,10 +1018,7 @@ static bool_t check_crc32(const uint8_t *buffer, unsigned length)
   found_crc = get_crc_v2(0, buffer, length);
 #endif
 
-  read_crc = ((uint32_t)buffer[length + 0]) << 24
-           | ((uint32_t)buffer[length + 1]) << 16
-           | ((uint32_t)buffer[length + 2]) <<  8
-           | ((uint32_t)buffer[length + 3]) <<  0;
+  read_crc = READ_32BITS(buffer);
 
   print_debug("%s: read CRC 0x%X and found 0x%X\n",
               __FUNCTION__,
@@ -1045,7 +1051,7 @@ static void increment_version_number(uint8_t *section)
   ** Make sure this function works for PAT & PMT
   */
 
-  version_number = (section[5] & 0x3E) >> 1;
+  version_number = READ_VERSION(&section[5]);
   if (++version_number >= 0x1F)
   {
     version_number = 1;
@@ -1139,6 +1145,10 @@ static const char *get_section_name(uint16_t pid, uint8_t table_id)
 static const char *get_descriptor_name(uint8_t descriptor_tag)
 {
   const char *name;
+
+  /*
+  ** TO BE COMPLETED
+  */
 
   switch (descriptor_tag)
   {
@@ -1257,8 +1267,8 @@ static const uint8_t *get_pat_payload(const uint8_t *section,
     return NULL;
   }
 
-  header->section_length = (((uint16_t)(section[1] & 0x0F)) << 8)
-                         | section[2];
+  header->section_length = READ_12BITS(&section[1]);
+
   if (header->section_length < PAT_MINIMUM_LENGTH)
   {
     print_error("%s: the PAT does not contain any program (len=%d)\n",
@@ -1267,9 +1277,9 @@ static const uint8_t *get_pat_payload(const uint8_t *section,
     return NULL;
   }
 
-  header->transport_stream_id = (((uint16_t)section[3]) << 8) | section[4];
+  header->transport_stream_id = READ_16BITS(&section[3]);
 
-  header->version_number = (section[5] & 0x3E) >> 1;
+  header->version_number = READ_VERSION(&section[5]);
 
   header->section_number = section[6];
 
@@ -1311,7 +1321,7 @@ static bool_t patch_pat_program(const pat_header_t *header,
 
   for (i = 0; i < n; i++, program += PAT_PROGRAM_SIZE)
   {
-    program_number = (((uint16_t)program[0]) << 8) | program[1];
+    program_number = READ_16BITS(&program[0]);
 
     if (target_prog->number == program_number)
     {
@@ -1357,11 +1367,11 @@ static uint16_t get_pmt_pid(const pat_header_t *header,
 
   for (i = 0; i < n; i++, program += PAT_PROGRAM_SIZE)
   {
-    program_number = (((uint16_t)program[0]) << 8) | program[1];
+    program_number = READ_16BITS(&program[0]);
 
     if (target_program_number == program_number)
     {
-      return (((uint16_t)(program[2] & 0x1F)) << 8) | program[3];
+      return READ_13BITS(&program[2]);
     }
   }
 
@@ -1384,8 +1394,8 @@ static bool_t get_first_program(const pat_header_t *header,
 
   for (i = 0; i < n; i++, program += PAT_PROGRAM_SIZE)
   {
-    first_prog->number = (((uint16_t)program[0]) << 8) | program[1];
-    first_prog->pmt_pid = (((uint16_t)(program[2] & 0x1F)) << 8) | program[3];
+    first_prog->number = READ_16BITS(&program[0]);
+    first_prog->pmt_pid = READ_13BITS(&program[2]);
 
     if (0 != first_prog->number)
     {
@@ -1421,8 +1431,8 @@ static void show_pat(const pat_header_t *header,
 
   for (i = 0; i < n; i++, program += PAT_PROGRAM_SIZE)
   {
-    program_number = (((uint16_t)program[0]) << 8) | program[1];
-    pid = (((uint16_t)(program[2] & 0x1F)) << 8) | program[3];
+    program_number = READ_16BITS(&program[0]);
+    pid = READ_13BITS(&program[2]);
 
     if (0 == program_number)
     {
@@ -1477,28 +1487,28 @@ static void show_pat(const pat_header_t *header,
 static const char *get_stream_type_name(uint8_t stream_type)
 {
   /*
-  ** TO BE COMLPLETED
+  ** TO BE COMPLETED
   */
 
   switch (stream_type)
   {
-  case 0x01: return "11172-2 Video";
-  case 0x02: return "13818-2 Video";
-  case 0x03: return "11172-3 Audio";
-  case 0x04: return "13818-3 Audio";
-  case 0x05: return "13818-1 private_sections";
-  case 0x06: return "13818-1 PES packets containing private data";
-  case 0x07: return "13522 MHEG";
-  case 0x08: return "DSM-CC";
-  case 0x09: return "H.222.1";
-  case 0x0A: return "13818-6 type A";
-  case 0x0B: return "13818-6 type B";
-  case 0x0C: return "13818-6 type C";
-  case 0x0D: return "13818-6 type D";
-  case 0x0E: return "13818-1 auxiliary";
-  case 0x0F: return "audio-ADTS";
-  case 0x11: return "audio-LATM";
-  case 0x1B: return "H264";
+  case STREAM_TYPE_11172_2_VIDEO:                         return "11172-2 Video";
+  case STREAM_TYPE_13818_2_VIDEO:                         return "13818-2 Video";
+  case STREAM_TYPE_11172_3_AUDIO:                         return "11172-3 Audio";
+  case STREAM_TYPE_13818_3_AUDIO:                         return "13818-3 Audio";
+  case STREAM_TYPE_13818_1_PRIVATE_SECTIONS:              return "13818-1 private_sections";
+  case STREAM_TYPE_13818_1_PES_PACKETS_WITH_PRIVATE_DATA: return "13818-1 packets with private data";
+  case STREAM_TYPE_13522_MHEG:                            return "13522 MHEG";
+  case STREAM_TYPE_DSMCC:                                 return "DSM-CC";
+  case STREAM_TYPE_H222_1:                                return "H.222.1";
+  case STREAM_TYPE_13818_6_TYPE_A:                        return "13818-6 type A";
+  case STREAM_TYPE_13818_6_TYPE_B:                        return "13818-6 type B";
+  case STREAM_TYPE_13818_6_TYPE_C:                        return "13818-6 type C";
+  case STREAM_TYPE_13818_6_TYPE_D:                        return "13818-6 type D";
+  case STREAM_TYPE_13818_1_AUXILIARY:                     return "13818-1 auxiliary";
+  case STREAM_TYPE_AUDIO_ADTS:                            return "audio-ADTS";
+  case STREAM_TYPE_AUDIO_LATM:                            return "audio-LATM";
+  case STREAM_TYPE_H264:                                  return "H264";
   default:
     break;
   }
@@ -1509,20 +1519,20 @@ static const char *get_stream_type_name(uint8_t stream_type)
 static unsigned get_type(uint8_t stream_type)
 {
   /*
-  ** TO BE COMLPLETED
+  ** TO BE COMPLETED
   */
 
   switch (stream_type)
   {
-  case 0x01:
-  case 0x02:
-  case 0x1B:
+  case STREAM_TYPE_11172_2_VIDEO:
+  case STREAM_TYPE_13818_2_VIDEO:
+  case STREAM_TYPE_H264:
     return VIDEO_TYPE;
 
-  case 0x03:
-  case 0x04:
-  case 0x0F:
-  case 0x11:
+  case STREAM_TYPE_11172_3_AUDIO:
+  case STREAM_TYPE_13818_3_AUDIO:
+  case STREAM_TYPE_AUDIO_ADTS:
+  case STREAM_TYPE_AUDIO_LATM:
     return AUDIO_TYPE;
 
   default:
@@ -1554,8 +1564,8 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
     return NULL;
   }
 
-  header->section_length = (((uint16_t)(section[1] & 0x0F)) << 8)
-                         | section[2];
+  header->section_length = READ_12BITS(&section[1]);
+
   if (header->section_length < PMT_MINIMUM_LENGTH)
   {
      print_error("%s: the PMT does not contain any ES (len=%d)\n",
@@ -1566,18 +1576,17 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
 
   crc = section + SECTION_HEADER_SIZE + header->section_length - 4;
 
-  header->program_number = (((uint16_t)section[3]) << 8) | section[4];
+  header->program_number = READ_16BITS(&section[3]);
 
-  header->version_number = (section[5] & 0x3E) >> 1;
+  header->version_number = READ_VERSION(&section[5]);
 
   header->section_number = section[6];
 
   header->last_section_number = section[7];
 
-  header->pcr_pid = (((uint16_t)(section[8] & 0x1F)) << 8) | section[9];
+  header->pcr_pid = READ_13BITS(&section[8]);
 
-  header->program_info_length = (((uint16_t)(section[10] & 0x0F)) << 8)
-                              | section[11];
+  header->program_info_length = READ_12BITS(&section[10]);
 
   header->number_of_es = 0;
 
@@ -1585,7 +1594,7 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
   {
     header->number_of_es++;
 
-    es_info_length = (((uint16_t)(es[3] & 0x0F)) << 8) | es[4];
+    es_info_length = READ_12BITS(&es[3]);
 
     es += PMT_MINIMUM_ES_SIZE;
     es += es_info_length;
@@ -1628,10 +1637,10 @@ static bool_t patch_pmt_es(const pmt_header_t *header,
 
   for (es = payload, i = 0; i < header->number_of_es; i++)
   {
-    old_pid = (((uint16_t)(es[1] & 0x1F)) << 8) | es[2];
+    old_pid = READ_13BITS(&es[1]);
     new_pid = INVALID_PID;
 
-    es_info_length = (((uint16_t)(es[3] & 0x0F)) << 8) | es[4];
+    es_info_length = READ_12BITS(&es[3]);
 
     if (old_pid == target_prog->pcr_pid)
     {
@@ -1682,8 +1691,8 @@ static unsigned get_es_list(const pmt_header_t *header,
     }
 
     es_list->stream_type = es[0];
-    es_list->pid = (((uint16_t)(es[1] & 0x1F)) << 8) | es[2];
-    es_list->info_length = (((uint16_t)(es[3] & 0x0F)) << 8) | es[4];
+    es_list->pid = READ_13BITS(&es[1]);
+    es_list->info_length = READ_12BITS(&es[3]);
     /* memcpy(es_list->info; &es[5]; es_list->info_length); */
 
     es += PMT_MINIMUM_ES_SIZE;
@@ -1744,8 +1753,8 @@ static void show_pmt(const pmt_header_t *header,
   for (i = 0; i < n; i++)
   {
     stream_type = es[0];
-    elementary_pid = (((uint16_t)(es[1] & 0x1F)) << 8) | es[2];
-    info_length = (((uint16_t)(es[3] & 0x0F)) << 8) | es[4];
+    elementary_pid = READ_13BITS(&es[1]);
+    info_length = READ_12BITS(&es[3]);
 
     print_output("  %02d- pid 0x%04X (%u) type 0x%02X (%s)\n",
                  i + 1,
@@ -1754,7 +1763,7 @@ static void show_pmt(const pmt_header_t *header,
 
     if (dsmcc_pid != INVALID_PID &&
         elementary_pid == dsmcc_pid &&
-        stream_type == 0x0B)
+        stream_type == STREAM_TYPE_13818_6_TYPE_B)
     {
       dsmcc = &es[5];
       dsmcc_info_length = info_length;
@@ -1772,7 +1781,7 @@ static void show_pmt(const pmt_header_t *header,
 
       if (ait_pid != INVALID_PID &&
           elementary_pid == ait_pid &&
-          stream_type == 0x05 &&
+          stream_type == STREAM_TYPE_13818_1_PRIVATE_SECTIONS &&
           descriptor_tag == DESCRIPTOR_TAG_APPLICATION_SIGNALLING)
       {
         app = descriptor;
@@ -1941,8 +1950,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
     return NULL;
   }
 
-  header->section_length = (((uint16_t)(section[1] & 0x0F)) << 8)
-                         | section[2];
+  header->section_length = READ_12BITS(&section[1]);
+
   if (header->section_length < SDT_MINIMUM_LENGTH)
   {
     print_error("%s: the SDT is not correct (len=%d)\n",
@@ -1958,15 +1967,15 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
     return NULL;
   }
 
-  header->transport_stream_id = (((uint16_t)section[3]) << 8) | section[4];
+  header->transport_stream_id = READ_16BITS(&section[3]);
 
-  header->version_number = (section[5] & 0x3E) >> 1;
+  header->version_number = READ_VERSION(&section[5]);
 
   header->section_number = section[6];
 
   header->last_section_number = section[7];
 
-  header->original_network_id = (((uint16_t)section[8]) << 8) | section[9];
+  header->original_network_id = READ_16BITS(&section[8]);
 
   header->number_of_services = 0;
 
@@ -1988,8 +1997,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
     }
     loop_size -= SDT_LOOP_MINIMUM_SIZE;
 
-    descriptors_loop_length = (((uint16_t)(section[i + 3] & 0x0F)) << 8)
-                            | section[i + 4];
+    descriptors_loop_length = READ_12BITS(&section[i + 3]);
+
     if (loop_size < descriptors_loop_length)
     {
       print_error("%s: SDT descriptors loop not complete\n",
@@ -2030,10 +2039,9 @@ static void show_sdt(const sdt_header_t *header,
 
   for (i = 0; i < header->number_of_services; i++) 
   {
-    service_id = (((uint16_t)service[0]) << 8) | service[1];
+    service_id = READ_16BITS(&service[0]);
 
-    descriptors_loop_length = (((uint16_t)(service[3] & 0x0F)) << 8)
-                            | service[4];
+    descriptors_loop_length = READ_12BITS(&service[3]);
 
     print_output("    - service 0x%X (%u)\n",
                  service_id,
@@ -2130,10 +2138,9 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
 
   for (i = 0; i < header->number_of_services; i++) 
   {
-    service_id = (((uint16_t)service[0]) << 8) | service[1];
+    service_id = READ_16BITS(&service[0]);
 
-    descriptors_loop_length = (((uint16_t)(service[3] & 0x0F)) << 8)
-                            | service[4];
+    descriptors_loop_length = READ_12BITS(&service[3]);
 
     dll = &service[3];
 
@@ -2529,17 +2536,17 @@ static bool_t parse_ait(uint8_t     *section,
 
   table_id = s[0]; s++;
   section_length_position = s;
-  section_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
-  application_type = (((uint16_t)(s[0] & 0x7F)) << 8) | s[1]; s += 2;
-  version_number = (s[0] & 0x3E) >> 1; s += 1;
-  section_number = s[0]; s += 1;
-  last_section_number = s[0]; s += 1;
-  common_descriptors_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
+  section_length = READ_12BITS(s); s += 2;
+  application_type = READ_15BITS(s); s += 2;
+  version_number = READ_VERSION(s); s += 1;
+  section_number = *s; s += 1;
+  last_section_number = *s; s += 1;
+  common_descriptors_length = READ_12BITS(s); s += 2;
   /*
   ** Common decriptors loop is bypassed, but should be displayed as well
   */
   application_loop_length_position = s + common_descriptors_length;
-  application_loop_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
+  application_loop_length = READ_12BITS(s); s += 2;
 
   real_section_length = section_length + 3;
 
@@ -2565,7 +2572,7 @@ static bool_t parse_ait(uint8_t     *section,
   for (i = 0; i < application_loop_length; )
   {
     organisation_id = READ_32BITS(s); s += 4;
-    application_id = ((uint16_t)s[0] << 8) | s[1]; s += 2;
+    application_id = READ_16BITS(s); s += 2;
 
     if (show)
     {
@@ -2589,9 +2596,9 @@ static bool_t parse_ait(uint8_t     *section,
     }
     /* End of application-id patch */
 
-    application_control_code = s[0]; s += 1;
+    application_control_code = *s; s += 1;
     application_descriptors_loop_length_position = s;
-    application_descriptors_loop_length = (((uint16_t)(s[0] & 0x0F)) << 8) | s[1]; s += 2;
+    application_descriptors_loop_length = READ_12BITS(s); s += 2;
 
     i += 9;
 
@@ -2612,9 +2619,9 @@ static bool_t parse_ait(uint8_t     *section,
         print_output("\n");
       }
 
-      descriptor_tag = s[0]; s += 1;
+      descriptor_tag = *s; s += 1;
       descriptor_length_position = s;
-      descriptor_length = s[0]; s += 1;
+      descriptor_length = *s; s += 1;
 
       i += 2;
       j += 2;
@@ -2633,7 +2640,7 @@ static bool_t parse_ait(uint8_t     *section,
         ** Application descriptor
         */
 
-        application_profiles_length = s[0]; s++;
+        application_profiles_length = *s; s++;
 
         if (show)
         {
@@ -2643,7 +2650,7 @@ static bool_t parse_ait(uint8_t     *section,
 
         for (k = 0; k < application_profiles_length / 5; k++)
         {
-          application_profile = (((uint16_t)s[0]) << 8) | s[1]; s += 2;
+          application_profile = READ_16BITS(s); s += 2;
           if (show)
           {
             print_output("      profile %u: 0x%04X (%d)\n", k + 1,
@@ -2736,8 +2743,8 @@ static bool_t parse_ait(uint8_t     *section,
         ** Transport protocol descriptor
         */
 
-        protocol_id = (((uint16_t)s[0]) << 8) | s[1]; s += 2;
-        transport_protocol_label = s[0]; s += 1;
+        protocol_id = READ_16BITS(s); s += 2;
+        transport_protocol_label = *s; s += 1;
 
         if (show)
         {
@@ -2757,7 +2764,7 @@ static bool_t parse_ait(uint8_t     *section,
           {
             /* Just patch URL */
 
-            URL_base_length = s[0];
+            URL_base_length = *s;
 
             if (URL_base_length > 0)
             {
@@ -2916,7 +2923,7 @@ static bool_t parse_ait(uint8_t     *section,
         */
         if (3 == protocol_id) /* HTTP */
         {
-          URL_base_length = s[0]; s += 1;
+          URL_base_length = *s; s += 1;
 
           if (URL_base_length > 0)
           { 
@@ -2928,11 +2935,11 @@ static bool_t parse_ait(uint8_t     *section,
             s += URL_base_length;
           }
 
-          URL_extension_count = s[0]; s += 1;
+          URL_extension_count = *s; s += 1;
 
           for (k = 0; k < URL_extension_count; k++)
           {
-            URL_extension_length = s[0]; s += 1;
+            URL_extension_length = *s; s += 1;
 
             if (show)
             {
@@ -3085,7 +3092,7 @@ static void print_application_signalling_descriptor(const uint8_t *descriptor)
     print_output("\nApplication Signalling Descriptor (length = %u)\n", length);
     for (l = 0; l < length; l += 3, descriptor += 3)
     {
-      type = ((((uint16_t)descriptor[0]) << 8) & 0x7F) | (uint16_t)descriptor[1];
+      type = READ_15BITS(&descriptor[0]);
       number = descriptor[2] & 0x1F;
 
       print_output("  - application_type: 0x%04X (%s)\n",
@@ -3973,7 +3980,7 @@ static void parse_ts(const char        *filename,
     else if (pid == target_prog->dsmcc_pid)
     {
       /*
-      ** TODO: show womething, anything, but something, and here
+      ** TODO: show something, anything, but something, and quick
       */
     }
 
@@ -4068,6 +4075,13 @@ static void parse_ts(const char        *filename,
   print_info("%s: end of file (%lu packets)\n",
              __FUNCTION__,
              nb_packets);
+}
+
+static void show_version(const char *name)
+{
+  print_user("\n");
+  print_user("%s version %s\n", name, TOOL_VERSION);
+  print_user("\n");
 }
 
 static void show_usage(const char *name)
@@ -4704,17 +4718,17 @@ int main(int argc, char **argv)
 
   unique_pid_stream_filename = NULL;
 
-  /*
-  ** TODO: allow directory processing in addition of file processing
-  */
-
-//  toolname = basename(*argv++);
+#if 0  /* basename does not seem to be portable */
+  toolname = basename(*argv++);
+#else
   toolname = *argv++;
+#endif
 
   if (argc < 2)
   {
     print_user("wrong number of arguments\n");
     show_usage(toolname);
+    show_version(toolname);
     return 0;
   }
 
