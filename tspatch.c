@@ -34,7 +34,7 @@ typedef unsigned long  uint32_t;
 /*
 ** TODO: complete and use these macros
 */
-#define READ_32BITS(p)      ((((uint32_t)p[0]) << 24) | (((uint32_t)p[1]) << 16) | (((uint32_t)p[2]) << 8) | (((uint32_t)p[3]) << 0))
+#define READ_32BITS(p)      ((((uint32_t)(p)[0]) << 24) | (((uint32_t)(p)[1]) << 16) | (((uint32_t)(p)[2]) << 8) | (((uint32_t)(p)[3]) << 0))
 #define READ_16BITS(p)      ((((uint16_t)(*(p))<<8)&0xFF00) | (uint16_t)*((p)+1))
 #define READ_12BITS(p)      ((((uint16_t)(*(p))<<8)&0x0F00) | (uint16_t)*((p)+1))
 #define READ_08BITS(p)      (*(p))
@@ -64,6 +64,61 @@ typedef unsigned long  uint32_t;
 #define TID_PAT (0x00)
 #define TID_CAT (0x01)
 #define TID_PMT (0x02)
+
+#define DESCRIPTOR_TAG_VIDEO_STREAM                    (0x02)
+#define DESCRIPTOR_TAG_AUDIO_STREAM                    (0x03)
+#define DESCRIPTOR_TAG_HIERARCHY                       (0x04)
+#define DESCRIPTOR_TAG_REGISTRATION                    (0x05)
+#define DESCRIPTOR_TAG_DATA_STREAM_ALIGNMENT           (0x06)
+#define DESCRIPTOR_TAG_TARGET_BACKGROUND_GRID          (0x07)
+#define DESCRIPTOR_TAG_VIDEO_WINDOW                    (0x08)
+#define DESCRIPTOR_TAG_CA                              (0x09)
+#define DESCRIPTOR_TAG_ISO_639_LANGUAGE                (0x0A)
+#define DESCRIPTOR_TAG_SYSTEM_CLOCK                    (0x0B)
+#define DESCRIPTOR_TAG_MULTIPLEX_BUFFER_UTILIZATION    (0x0C)
+#define DESCRIPTOR_TAG_COPYRIGHT                       (0x0D)
+#define DESCRIPTOR_TAG_MAXIMUM_BITRATE                 (0x0E)
+#define DESCRIPTOR_TAG_PRIVATE_DATA_INDICATOR          (0x0F)
+#define DESCRIPTOR_TAG_SMOOTHING_BUFFER                (0x10)
+#define DESCRIPTOR_TAG_STD                             (0x11)
+#define DESCRIPTOR_TAG_IBP                             (0x12)
+#define DESCRIPTOR_TAG_CAROUSEL_IDENTIFIER             (0x13)
+#define DESCRIPTOR_TAG_ASSOCIATION_TAG                 (0x14)
+#define DESCRIPTOR_TAG_DEFERRED_ASSOCIATION_TAGS       (0x15)
+#define DESCRIPTOR_TAG_NPT_REFERENCE                   (0x17)
+#define DESCRIPTOR_TAG_NPT_ENDPOINT                    (0x18)
+#define DESCRIPTOR_TAG_STREAM_MODE                     (0x19)
+#define DESCRIPTOR_TAG_STREAM_EVENT                    (0x1A)
+#define DESCRIPTOR_TAG_MPEG4_VIDEO                     (0x1B)
+#define DESCRIPTOR_TAG_MPEG4_AUDIO                     (0x1C)
+#define DESCRIPTOR_TAG_IOD                             (0x1D)
+#define DESCRIPTOR_TAG_SL                              (0x1E)
+#define DESCRIPTOR_TAG_FMC                             (0x1F)
+#define DESCRIPTOR_TAG_EXTERNAL_ES_ID                  (0x20)
+#define DESCRIPTOR_TAG_MUXCODE                         (0x21)
+#define DESCRIPTOR_TAG_FMXBUFFERISZE                   (0x22)
+#define DESCRIPTOR_TAG_MULTIPLEXBUFFER                 (0x23)
+#define DESCRIPTOR_TAG_CONTENT_LABELLING               (0x24)
+#define DESCRIPTOR_TAG_METADATA_POINTER                (0x25)
+#define DESCRIPTOR_TAG_METADATA                        (0x26)
+#define DESCRIPTOR_TAG_METADATA_STD                    (0x27)
+#define DESCRIPTOR_TAG_AVC_VIDEO                       (0x28)
+#define DESCRIPTOR_TAG_IPMP                            (0x29)
+#define DESCRIPTOR_TAG_AVC_TIMING_AND_HRD              (0x2A)
+#define DESCRIPTOR_TAG_MPEG2_AAC_AUDIO                 (0x2B)
+#define DESCRIPTOR_TAG_FLEXMUXTIMINIG                  (0x2C)
+#define DESCRIPTOR_TAG_MPEG4_TEXT                      (0x2D)
+#define DESCRIPTOR_TAG_MPEG4_AUDIO_EXTENSION           (0x2E)
+#define DESCRIPTOR_TAG_AUXILIARY_VIDEO_STREAM          (0x2F)
+#define DESCRIPTOR_TAG_SVC_EXTENSION                   (0x30)
+#define DESCRIPTOR_TAG_MVC_EXTENSION                   (0x31)
+#define DESCRIPTOR_TAG_J2K_VIDEO                       (0x32)
+#define DESCRIPTOR_TAG_MVC_OPERATION_POINT             (0x33)
+#define DESCRIPTOR_TAG_MPEG2_STEREOSCOPIC_VIDEO_FORMAT (0x34)
+#define DESCRIPTOR_TAG_STEREOSCOPIC_PROGRAM_INFO       (0x35)
+#define DESCRIPTOR_TAG_STEREOSCOPIC_VIDEO_INFO         (0x36)
+#define DESCRIPTOR_TAG_TRANSPORT_PROFILE               (0x37)
+#define DESCRIPTOR_TAG_HEVC_VIDEO                      (0x38)
 
 #define SECTION_TABLE_ID_SIZE            1
 #define SECTION_SECTION_LENGTH_SIZE      2
@@ -140,6 +195,7 @@ typedef struct
   uint16_t pcr_pid;
   uint16_t audio_pid;
   uint16_t video_pid;
+  uint16_t dsmcc_pid;
   uint16_t es_pid;
 
 } prog_t;
@@ -152,6 +208,7 @@ static void init_prog(prog_t *prog)
   prog->pcr_pid   = INVALID_PID;
   prog->audio_pid = INVALID_PID;
   prog->video_pid = INVALID_PID;
+  prog->dsmcc_pid = INVALID_PID;
   prog->es_pid    = INVALID_PID;
 }
 
@@ -184,17 +241,6 @@ static void init_prog(prog_t *prog)
 #define TID_TOT                     (0x73)
 #define TID_AIT                     (0x74)
 
-#define DESCRIPTOR_TAG_VIDEO_STREAM                 (0x02)
-#define DESCRIPTOR_TAG_AUDIO_STREAM                 (0x03)
-#define DESCRIPTOR_TAG_HIERARCHY                    (0x04)
-#define DESCRIPTOR_TAG_REGISTRATION                 (0x05)
-#define DESCRIPTOR_TAG_DATA_STREAM_ALIGNMENT        (0x06)
-#define DESCRIPTOR_TAG_TARGET_BACKGROUND_GRID       (0x07)
-#define DESCRIPTOR_TAG_VIDEO_WINDOW                 (0x08)
-#define DESCRIPTOR_TAG_CA                           (0x09)
-#define DESCRIPTOR_TAG_ISO_639_LANGUAGE             (0x0A)
-#define DESCRIPTOR_TAG_SYSTEM_CLOCK                 (0x0B)
-#define DESCRIPTOR_TAG_MULTIPLEX_BUFFER_UTILIZATION (0x0C)
 #define DESCRIPTOR_TAG_NETWORK_NAME                 (0x40)
 #define DESCRIPTOR_TAG_SERVICE_LIST                 (0x41)
 #define DESCRIPTOR_TAG_STUFFING                     (0x42)
@@ -216,18 +262,42 @@ static void init_prog(prog_t *prog)
 #define DESCRIPTOR_TAG_STREAM_IDENTIFIER            (0x52)
 #define DESCRIPTOR_TAG_CA_IDENTIFIER                (0x53)
 #define DESCRIPTOR_TAG_CONTENT                      (0x54)
+#define DESCRIPTOR_TAG_PARENTAL_RATING              (0x55)
+#define DESCRIPTOR_TAG_TELETEXT                     (0x56)
+#define DESCRIPTOR_TAG_TELEPHONE                    (0x57)
+#define DESCRIPTOR_TAG_LOCAL_TIME_OFFSET            (0x58)
 #define DESCRIPTOR_TAG_SUBTITLING                   (0x59)
+#define DESCRIPTOR_TAG_TERRESTRIAL_DELIVERY_SYSTEM  (0x5A)
+#define DESCRIPTOR_TAG_MULTILINGUAL_NETWORK_NAME    (0x5B)
+#define DESCRIPTOR_TAG_MULTILINGUAL_BOUQUET_NAME    (0x5C)
 #define DESCRIPTOR_TAG_MULTILINGUAL_SERVICE_NAME    (0x5D)
+#define DESCRIPTOR_TAG_MULTILINGUAL_COMPONENT       (0x5E)
+#define DESCRIPTOR_TAG_PRIVATE_DATA_SPECIFIER       (0x5F)
+#define DESCRIPTOR_TAG_SERVICE_MOVE                 (0x60)
+#define DESCRIPTOR_TAG_SHORT_SMOOTHING_BUFFER       (0x61)
+#define DESCRIPTOR_TAG_FREQUENCY_LIST               (0x62)
+#define DESCRIPTOR_TAG_PARTIAL_TRANSPORT_STREAM     (0x63)
 #define DESCRIPTOR_TAG_DATA_BROADCAST               (0x64)
 #define DESCRIPTOR_TAG_SCRAMBLING                   (0x65)
 #define DESCRIPTOR_TAG_DATA_BROADCAST_ID            (0x66)
 #define DESCRIPTOR_TAG_TRANSPORT_STREAM             (0x67)
 #define DESCRIPTOR_TAG_APPLICATION_SIGNALLING       (0x6F)
+#define DESCRIPTOR_TAG_ADAPTATION_FIELD_DATA        (0x70)
+#define DESCRIPTOR_TAG_SERVICE_IDENTIFIER           (0x71)
+#define DESCRIPTOR_TAG_SERVICE_AVAILABILITY         (0x72)
+#define DESCRIPTOR_TAG_DEFAULT_AUTHORITY            (0x73)
+#define DESCRIPTOR_TAG_RELATED_CONTENT              (0x74)
+#define DESCRIPTOR_TAG_TVA_ID                       (0x75)
+#define DESCRIPTOR_TAG_CONTENT_IDENTIFIER           (0x76)
+#define DESCRIPTOR_TAG_TIME_SLICE_FEC_IDENTIFIER    (0x77)
+#define DESCRIPTOR_TAG_ECM_REPETITION_RATE          (0x78)
+#define DESCRIPTOR_TAG_S2_SATELLITE_DELIVERY_SYSTEM (0x79)
 #define DESCRIPTOR_TAG_ENHANCED_AC3                 (0x7A)
+#define DESCRIPTOR_TAG_DTS_AUDIO_STREAM             (0x7B)
+#define DESCRIPTOR_TAG_AAC                          (0x7C)
+#define DESCRIPTOR_TAG_XAIT_LOCATION                (0x7D)
+#define DESCRIPTOR_TAG_FTA_CONTENT_MANAGEMENT       (0x7E)
 #define DESCRIPTOR_TAG_EXTENSION                    (0x7F)
-/*
-** TODO: complete this list
-*/
 
 typedef struct
 {
@@ -338,8 +408,47 @@ static void print_buffer(const char    *header,
     print_output("%02X ", buffer[i]);
   }
   print_output("\n");
+}
 
-  print_string(header, buffer, size);
+static void dump_buffer(const char    *comment,
+                        const uint8_t *buffer,
+                        unsigned       size)
+{
+  const char *space;
+  const char *space0 = "";
+  const char *space1 = " ";
+  const char *space2 = "  ";
+
+  const unsigned step = 16;
+  unsigned i, j;
+
+  print_output("\nDUMP BUFFER (size = %u): %s\n",
+               size, comment == NULL ? "" : comment);
+
+  for (i = 0; i < size; i += step)
+  {
+    print_output("  0x%04X:", i);
+    for (j= 0; j < step; j++)
+    {
+      space = (j == step / 2) ? space2 : space1;
+      if ((i + j) < size)
+      {
+        print_output("%s%02X", space, buffer[i + j]);
+      }
+      else
+      {
+        print_output("%s  ", space);
+      }
+    }
+    print_output("  ");
+    for (j= 0; (j < step) && ((i + j) < size); j++)
+    {
+      space = (j == step / 2) ? space1 : space0;
+      print_output("%s%c", space, get_printable_character(buffer[i + j]));
+    }
+    print_output("\n");
+  }
+  print_output("\n");
 }
 
 /************/
@@ -555,6 +664,9 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
 
   if (dump)
   {
+    /*
+    ** TODO: use print_buffer or dump_buffer function
+    */
     print_debug("%s: dump %s section\n",
                 __FUNCTION__,
                 get_section_name(pid, packet[0]));
@@ -1041,6 +1153,10 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
   case DESCRIPTOR_TAG_ISO_639_LANGUAGE:             name = "ISO_639_LANGUAGE";             break;
   case DESCRIPTOR_TAG_SYSTEM_CLOCK:                 name = "SYSTEM_CLOCK";                 break;
   case DESCRIPTOR_TAG_MULTIPLEX_BUFFER_UTILIZATION: name = "MULTIPLEX_BUFFER_UTILIZATION"; break;
+  case DESCRIPTOR_TAG_STD:                          name = "STD";                          break;
+  case DESCRIPTOR_TAG_IBP:                          name = "IBP";                          break;
+  case DESCRIPTOR_TAG_CAROUSEL_IDENTIFIER:          name = "CAROUSEL_IDENTIFIER";          break;
+  case DESCRIPTOR_TAG_ASSOCIATION_TAG:              name = "ASSOCIATION_TAG";              break;
   case DESCRIPTOR_TAG_NETWORK_NAME:                 name = "NETWORK_NAME";                 break;
   case DESCRIPTOR_TAG_SERVICE_LIST:                 name = "SERVICE_LIST";                 break;
   case DESCRIPTOR_TAG_STUFFING:                     name = "STUFFING";                     break;
@@ -1069,6 +1185,7 @@ static const char *get_descriptor_name(uint8_t descriptor_tag)
   case DESCRIPTOR_TAG_DATA_BROADCAST_ID:            name = "DATA_BROADCAST_ID";            break;
   case DESCRIPTOR_TAG_TRANSPORT_STREAM:             name = "TRANSPORT_STREAM";             break;
   case DESCRIPTOR_TAG_APPLICATION_SIGNALLING:       name = "APPLICATION_SIGNALLING";       break;
+  case DESCRIPTOR_TAG_XAIT_LOCATION:                name = "XAIT_LOCATION";                break;
   case DESCRIPTOR_TAG_ENHANCED_AC3:                 name = "ENHANCED_AC3";                 break;
   case DESCRIPTOR_TAG_EXTENSION:                    name = "EXTENSION";                    break;
   case 0xFF:                                        name = "FORBIDDEN";                    break;
@@ -1416,6 +1533,7 @@ static unsigned get_type(uint8_t stream_type)
 }
 
 static void print_application_signalling_descriptor(const uint8_t *descriptor);
+static void print_dsmcc_descriptors(const uint8_t *descriptors, uint16_t info_length);
 
 static const uint8_t *get_pmt_payload(const uint8_t *section,
                                       pmt_header_t  *header)
@@ -1599,19 +1717,22 @@ static uint16_t get_first_pid(const pmt_header_t *header,
 
 static void show_pmt(const pmt_header_t *header,
                      const uint8_t      *es,
-                     uint16_t           ait_pid)
+                     uint16_t           ait_pid,
+                     uint16_t           dsmcc_pid)
 {
   unsigned i;
   unsigned n;
   unsigned len;
   uint16_t elementary_pid;
   uint16_t info_length;
+  uint16_t dsmcc_info_length;
   uint8_t  stream_type;
   uint8_t  descriptor_tag;
   uint8_t  descriptor_length;
 
   const uint8_t *descriptor;
   const uint8_t *app = NULL;
+  const uint8_t *dsmcc = NULL;
 
   print_output("PMT version 0x%02X (%u) for program 0x%02X (%u) has %d elementary streams\n",
                header->version_number, header->version_number,
@@ -1631,6 +1752,14 @@ static void show_pmt(const pmt_header_t *header,
                  elementary_pid, elementary_pid,
                  stream_type, get_stream_type_name(stream_type));
 
+    if (dsmcc_pid != INVALID_PID &&
+        elementary_pid == dsmcc_pid &&
+        stream_type == 0x0B)
+    {
+      dsmcc = &es[5];
+      dsmcc_info_length = info_length;
+    }
+
     for (len  = 0,                 descriptor = &es[5];
          len  < info_length;
          len += descriptor_length, descriptor += 2 + descriptor_length)
@@ -1643,7 +1772,7 @@ static void show_pmt(const pmt_header_t *header,
 
       if (ait_pid != INVALID_PID &&
           elementary_pid == ait_pid &&
-          stream_type == 5 &&
+          stream_type == 0x05 &&
           descriptor_tag == DESCRIPTOR_TAG_APPLICATION_SIGNALLING)
       {
         app = descriptor;
@@ -1657,6 +1786,98 @@ static void show_pmt(const pmt_header_t *header,
   if (app != NULL)
   {
     print_application_signalling_descriptor(app);
+  }
+
+  if (dsmcc != NULL)
+  {
+    print_dsmcc_descriptors(dsmcc, dsmcc_info_length);
+  }
+}
+
+static void print_dsmcc_descriptors(const uint8_t *descriptors, uint16_t info_length)
+{
+  const uint8_t *descriptor = descriptors;
+  uint32_t carousel_id;
+  uint16_t len;
+  uint16_t data_broadcast_id;
+  uint8_t  selector_length;
+  uint8_t  text_length;
+  uint8_t  component_tag;
+  uint8_t  format_id;
+  uint8_t  descriptor_tag;
+  uint8_t  descriptor_length;
+
+  print_output("\nList of descriptors related to DSMCC (length = %u)\n", info_length);
+
+  for (len  = 0;
+       len  < info_length;
+       len += descriptor_length, descriptor += 2 + descriptor_length)
+  {
+    descriptor_tag = descriptor[0];
+    descriptor_length = descriptor[1];
+
+    print_output("  - descriptor 0x%X (%s)\n",
+                 descriptor_tag,
+                 get_descriptor_name(descriptor_tag));
+
+    if (descriptor_tag == DESCRIPTOR_TAG_STREAM_IDENTIFIER)
+    {
+      component_tag = descriptor[2];
+      print_output("    - component_tag: 0x%X (%lu)\n",
+                   component_tag, component_tag);
+    }
+    else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST)
+    {
+      data_broadcast_id = READ_16BITS(&descriptor[2]);
+      print_output("    - data_broadcast_id: 0x%X (%lu)\n",
+                   data_broadcast_id, data_broadcast_id);
+      component_tag = descriptor[4];
+      print_output("    - component_tag: 0x%X (%lu)\n",
+                   component_tag, component_tag);
+      selector_length = descriptor[5];
+      print_buffer("    - selector_byte:", &descriptor[6], selector_length);
+      print_output("    - ISO_639_language_code: %02X%02X%02X (%c%c%c)",
+                   descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2],
+                   descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2]);
+      text_length = descriptor[6 + selector_length + 3];
+      print_string("    - text_char:", &descriptor[6 + selector_length + 4], text_length);
+    }
+    else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST_ID)
+    {
+      data_broadcast_id = READ_16BITS(&descriptor[2]);
+      print_output("    - data_broadcast_id: 0x%X (%lu)\n",
+                   data_broadcast_id, data_broadcast_id);
+      print_buffer("    - id_selector_byte: ", &descriptor[4], descriptor_length - 2);
+    }
+    else if (descriptor_tag == DESCRIPTOR_TAG_CAROUSEL_IDENTIFIER)
+    {
+      carousel_id = READ_32BITS(&descriptor[2]);
+      print_output("    - carousel_id: 0x%08X (%lu)\n",
+                   carousel_id, carousel_id);
+      format_id = descriptor[6];
+
+      if (format_id == 0)
+      {
+        print_output("    - no format specifier\n");
+      }
+      else if (format_id == 1)
+      {
+        print_output("    - format_specifier:\n");
+        print_output("        module version: 0x%X\n", descriptor[7]);
+        print_output("        module id: 0x%X\n", READ_16BITS(&descriptor[8]));
+        print_output("        block size: %lu\n", READ_16BITS(&descriptor[10]));
+        print_output("        module size: %lu\n", READ_32BITS(&descriptor[12]));
+        print_output("        original size: %u\n", descriptor[16]);
+        print_output("        timeout: %lus\n", READ_32BITS(&descriptor[17]));
+        print_buffer("        object key data: ", &descriptor[22], descriptor[21]);
+      }
+    }
+    else
+    {
+      dump_buffer(get_descriptor_name(descriptor_tag),
+                  descriptor,
+                  descriptor_length);
+    }
   }
 }
 
@@ -1963,10 +2184,10 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
         */
         remaining_len -= service_provider_name_length;
         memcpy(buffer, spn + service_provider_name_length, remaining_len);
-        //print_buffer("BUFFER: saved section remaining\n", buffer, remaining_len);
+        //dump_buffer("saved section remaining", buffer, remaining_len);
         memcpy(spn, new_svc->name, strlen(new_svc->name));
         memcpy(spn + strlen(new_svc->name), buffer, remaining_len);
-        //print_buffer("BUFFER: before length fields patches\n", section, TS_PACKET_SIZE - 4);
+        //dump_buffer("before length fields patches", section, TS_PACKET_SIZE - 4);
 
         /*
         ** Update all length fields
@@ -2006,7 +2227,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
           sl[0]  = (sl[0] & 0xF0) | ((*section_length >> 8) & 0x0F);
           sl[1]  = *section_length & 0xFF;
         }
-        //print_buffer("BUFFER: after length fields patches\n", section, TS_PACKET_SIZE - 4);
+        //dump_buffer("after length fields patches", section, TS_PACKET_SIZE - 4);
 
         return TRUE;
       }
@@ -2221,7 +2442,7 @@ static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
   static
   uint8_t  buffer[TS_PACKET_SIZE - 4];       /* temporary buffer where the section is stored */
 
-  //print_buffer("BUFFER: before ait patch\n", s1, 184);
+  //dump_buffer("before ait patch", s1, 184);
 
   new_url_len = strlen(new_url);
   index = s2 - s1 + len->patch;              /* end of replaced string position */
@@ -2251,7 +2472,7 @@ static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
 
   len->patch = new_url_len;
 
-  //print_buffer("BUFFER: after ait patch\n", s1, 184);
+  //dump_buffer("after ait patch", s1, 184);
 }
 
 static bool_t parse_ait(uint8_t     *section,
@@ -2758,6 +2979,7 @@ static bool_t parse_ait(uint8_t     *section,
           if (show)
           {
             print_buffer("      ", s, selector_bytes_size);
+            print_string("      ", s, selector_bytes_size);
           }
 
           s += selector_bytes_size;
@@ -2822,6 +3044,7 @@ static bool_t parse_ait(uint8_t     *section,
         if (show)
         {
           print_buffer("      ", s, descriptor_length);
+          print_string("      ", s, descriptor_length);
         }
 
         s += descriptor_length;
@@ -3190,12 +3413,15 @@ typedef enum
 {
   SHOW_ALL_PID,
   SHOW_ALL_PAT,
+#ifdef SUPPORT_SHOW_ALL_PMT
   SHOW_ALL_PMT,
+#endif
   SHOW_ALL_SDT,
   SHOW_PAT,
   SHOW_PMT,
   SHOW_SDT,
   SHOW_AIT,
+  SHOW_DSMCC,
   SHOW_PID,
   SHOW_TIME,
   SHOW_BR,
@@ -3245,12 +3471,15 @@ static const char *command_string[NB_COMMANDS] =
 {
   "-show-all-pid",
   "-show-all-pat",
+#ifdef SUPPORT_SHOW_ALL_PMT
   "-show-all-pmt",
+#endif
   "-show-all-sdt",
   "-show-pat",
   "-show-pmt",
   "-show-sdt",
   "-show-ait",
+  "-show-dsmcc",
   "-show-pid",
   "-show-time",
   "-show-br",
@@ -3286,12 +3515,15 @@ typedef enum
 {
   DECLARE_COMMAND_MASK(SHOW_ALL_PID),
   DECLARE_COMMAND_MASK(SHOW_ALL_PAT),
+#ifdef SUPPORT_SHOW_ALL_PMT
   DECLARE_COMMAND_MASK(SHOW_ALL_PMT),
+#endif
   DECLARE_COMMAND_MASK(SHOW_ALL_SDT),
   DECLARE_COMMAND_MASK(SHOW_PAT),
   DECLARE_COMMAND_MASK(SHOW_PMT),
   DECLARE_COMMAND_MASK(SHOW_SDT),
   DECLARE_COMMAND_MASK(SHOW_AIT),
+  DECLARE_COMMAND_MASK(SHOW_DSMCC),
   DECLARE_COMMAND_MASK(SHOW_PID),
   DECLARE_COMMAND_MASK(SHOW_TIME),
   DECLARE_COMMAND_MASK(SHOW_BR),
@@ -3584,12 +3816,15 @@ static void parse_ts(const char        *filename,
         {
           section_length = pmt_header.section_length;
 
-          if (IS_ACTIVE(command, SHOW_ALL_PMT) ||
-              (IS_ACTIVE(command, SHOW_PMT) &&
+          if ((IS_ACTIVE(command, SHOW_PMT) &&
               pmt_header.program_number == target_prog->number &&
-              pmt_header.version_number != pmt_version_number))
+              pmt_header.version_number != pmt_version_number)
+#ifdef SUPPORT_SHOW_ALL_PMT
+              || IS_ACTIVE(command, SHOW_ALL_PMT)
+#endif
+             )
           {
-            show_pmt(&pmt_header, payload, ait->pid);
+            show_pmt(&pmt_header, payload, ait->pid, target_prog->dsmcc_pid);
             pmt_version_number = pmt_header.version_number;
           }
 
@@ -3735,6 +3970,12 @@ static void parse_ts(const char        *filename,
                    ? PATCH_LEVEL_PACKET_AND_CRC : PATCH_LEVEL_NONE;
       /* Dont want to increment the version number in this case */
     }
+    else if (pid == target_prog->dsmcc_pid)
+    {
+      /*
+      ** TODO: show womething, anything, but something, and here
+      */
+    }
 
     /*
     ** Operations on PIDs
@@ -3783,9 +4024,9 @@ static void parse_ts(const char        *filename,
       */
       section_length += SECTION_HEADER_SIZE;
       section_length -= SECTION_CRC_SIZE;
-      //print_buffer("BUFFER: before CRC update\n", section, section_length + SECTION_CRC_SIZE);
+      //dump_buffer("before CRC update", section, section_length + SECTION_CRC_SIZE);
       update_crc32(section, section_length);
-      //print_buffer("BUFFER: after CRC update\n", section, section_length + SECTION_CRC_SIZE);
+      //dump_buffer("after CRC update", section, section_length + SECTION_CRC_SIZE);
     }
 
     if (new_file != NULL)
@@ -3854,10 +4095,13 @@ static void show_usage(const char *name)
   print_user("    -show-pid          display all detected PIDs\n");
   print_user("    -show-all-pid      display all PIDs of all packets\n");
   print_user("    -show-all-pat      display all PATs (limited interest)\n");
+#ifdef SUPPORT_SHOW_ALL_PMT
   print_user("    -show-all-pmt      display all PMTs of selected program (limited interest)\n");
+#endif
   print_user("    -show-sdt          display the SDT\n");
   print_user("    -show-ait <pid>    display the AIT identified by its PID\n");
   print_user("                       also select the AIT PID for -set-ait- commands below\n");
+  print_user("    -show-dsmcc <pid>  display info about DSMCC\n");
   print_user("\n");
   print_user("    file patching commands\n");
   print_user("    -rep-tsid <tsid>   replace transport stream id by new one\n");
@@ -3938,10 +4182,12 @@ static uint32_t parse_args(int argc, char **argv,
     {
       user_command |= COMMAND_MASK_SHOW_PMT;
     }
+#ifdef SUPPORT_SHOW_ALL_PMT
     else if (IS_COMMAND(command, SHOW_ALL_PMT))
     {
       user_command |= COMMAND_MASK_SHOW_ALL_PMT;
     }
+#endif
     else if (IS_COMMAND(command, SHOW_SDT))
     {
       user_command |= COMMAND_MASK_SHOW_SDT;
@@ -4052,6 +4298,11 @@ static uint32_t parse_args(int argc, char **argv,
       {
         ait->pid = atoi(value1);
         user_command |= COMMAND_MASK_SHOW_AIT;
+      }
+      else if (IS_COMMAND(command, SHOW_DSMCC))
+      {
+        sel_prog->dsmcc_pid = atoi(value1);
+        user_command |= COMMAND_MASK_SHOW_DSMCC;
       }
       else if (IS_COMMAND(command, TOGGLE_TSC))
       {
@@ -4272,6 +4523,16 @@ static uint32_t parse_args(int argc, char **argv,
   {
     print_user("  - show & select AIT PID 0x%X (%u)\n",
                ait->pid, ait->pid);
+  }
+
+  if (INVALID_PID != sel_prog->dsmcc_pid)
+  {
+    print_user("  - show DSMCC info of PID 0x%X (%u)\n",
+               sel_prog->dsmcc_pid, sel_prog->dsmcc_pid);
+  }
+  else
+  {
+    print_user("  - no DSMCC info\n");
   }
 
   if (0 != (user_command & COMMAND_MASK_SHOW_PID))
