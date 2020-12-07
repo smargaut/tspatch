@@ -49,7 +49,8 @@ typedef unsigned long  uint32_t;
 #define WRITE_13BITS(p,v)                                                                                   (p)[0] = (uint8_t)(((v) >> 8) & 0x1F); (p)[1] = (uint8_t)((v) & 0xFF)
 #define WRITE_12BITS(p,v)                                                                                   (p)[0] = (uint8_t)(((v) >> 8) & 0x0F); (p)[1] = (uint8_t)((v) & 0xFF)
 #define WRITE_08BITS(p,v)                                                                                                                          (p)[0] = (uint8_t)((v) & 0xFF)
-#define WRITE_VERSION(p,v)  (p)[0] = ((p)[0] & 0xC1) + (((v) & 0x1F) << 1)
+#define WRITE_PID(p,v)      (p)[0] = ((p)[0] & 0xE0) | (uint8_t)(((v) >> 8) & 0x1F); (p)[1] = (uint8_t)((v) & 0xFF)
+#define WRITE_VERSION(p,v)  (p)[0] = ((p)[0] & 0xC1) | (((v) & 0x1F) << 1)
 
 /****************************/
 /*** MACROS & TYPES: MPEG ***/
@@ -73,6 +74,9 @@ typedef unsigned long  uint32_t;
 #define TID_PAT (0x00)
 #define TID_CAT (0x01)
 #define TID_PMT (0x02)
+
+#define TID_DSMCC_UN (0x3B)
+#define TID_DSMCC_DD (0x3C)
 
 #define STREAM_TYPE_11172_2_VIDEO                          (0x01)
 #define STREAM_TYPE_13818_2_VIDEO                          (0x02)
@@ -656,13 +660,14 @@ static bool_t read_pcr(const uint8_t *packet, pcr_t *pcr)
 
 static const char *get_section_name(uint16_t pid, uint8_t table_id);
 
-static uint8_t *get_section(const uint8_t *packet, bool_t try)
+static uint8_t *get_section(const uint8_t *packet, bool_t dsmcc, bool_t try)
 {
   uint16_t pid;
   uint16_t section_length;
   uint8_t  adaptation_field_control;
   uint8_t  adaptation_field_length;
   uint8_t  pointer_field;
+  uint8_t  section_syntax_indicator;
 
   pid = get_pid(packet);
 
@@ -690,6 +695,11 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
     }
     else
     {
+      if (dsmcc)
+      {
+        goto SPECIAL_DSMCC;
+      }
+
       print_error0("invalid adaptation field\n");
     }
     return NULL;
@@ -709,6 +719,11 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
     }
     else
     {
+      if (dsmcc)
+      {
+        goto SPECIAL_DSMCC;
+      }
+
       print_error0("invalid pointer field\n");
     }
     return NULL;
@@ -717,16 +732,25 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
   /* Go to section */
   packet += pointer_field;
 
+  section_syntax_indicator = (packet[0] >> 7) & 0x01;
+
   section_length = READ_12BITS(&packet[1]);
   if (section_length > 1024)
   {
+    if (dsmcc)
+    {
+      goto SPECIAL_DSMCC;
+    }
+
     if (try)
     {
-      print_error1("invalid section length\n");
+      print_error1("invalid section length 0x%X (%u)\n",
+                   section_length, section_length);
     }
     else
     {
-      print_error0("invalid section length\n");
+      print_error0("invalid section length 0x%X (%u)\n",
+                 section_length, section_length);
     }
     return NULL;
   }
@@ -747,14 +771,27 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
     /* but DVB table id is tested, this is an heresy */
     print2("TDT section has no CRC\n");
   }
+  else if (section_syntax_indicator == 0)
+  {
+    print2("dont check CRC when syntax indicator is 0\n");
+  }
   else if (! check_crc32(packet, (unsigned)section_length))
   {
+    if (dsmcc)
+    {
+      goto SPECIAL_DSMCC;
+    }
+
     print0("CRC error on TID 0x%X (%u)\n",
            packet[0], packet[0]);
     return NULL;
   }
 
   return (uint8_t*)packet;
+
+SPECIAL_DSMCC:
+  dump_buffer("dsmcc section (1)", packet, 32, PRINT_LEVEL_0);
+  return NULL;
 }
 
 static bool_t is_pid_in_list(uint16_t       pid,
@@ -1807,94 +1844,6 @@ static void show_pmt(const pmt_header_t *header,
   if (dsmcc != NULL)
   {
     print_dsmcc_descriptors(dsmcc, dsmcc_info_length);
-  }
-}
-
-static void print_dsmcc_descriptors(const uint8_t *descriptors, uint16_t info_length)
-{
-  const uint8_t *descriptor = descriptors;
-  uint32_t carousel_id;
-  uint16_t len;
-  uint16_t data_broadcast_id;
-  uint8_t  selector_length;
-  uint8_t  text_length;
-  uint8_t  component_tag;
-  uint8_t  format_id;
-  uint8_t  descriptor_tag;
-  uint8_t  descriptor_length;
-
-  print_output("\nList of descriptors related to DSMCC (length = %u)\n", info_length);
-
-  for (len  = 0;
-       len  < info_length;
-       len += descriptor_length, descriptor += 2 + descriptor_length)
-  {
-    descriptor_tag = descriptor[0];
-    descriptor_length = descriptor[1];
-
-    print_output("  - descriptor 0x%X (%s)\n",
-                 descriptor_tag,
-                 get_descriptor_name(descriptor_tag));
-
-    if (descriptor_tag == DESCRIPTOR_TAG_STREAM_IDENTIFIER)
-    {
-      component_tag = descriptor[2];
-      print_output("    - component_tag: 0x%X (%lu)\n",
-                   component_tag, component_tag);
-    }
-    else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST)
-    {
-      data_broadcast_id = READ_16BITS(&descriptor[2]);
-      print_output("    - data_broadcast_id: 0x%X (%lu)\n",
-                   data_broadcast_id, data_broadcast_id);
-      component_tag = descriptor[4];
-      print_output("    - component_tag: 0x%X (%lu)\n",
-                   component_tag, component_tag);
-      selector_length = descriptor[5];
-      print_buffer("    - selector_byte:", &descriptor[6], selector_length, PRINT_LEVEL_0);
-      print_output("    - ISO_639_language_code: %02X%02X%02X (%c%c%c)",
-                   descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2],
-                   descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2]);
-      text_length = descriptor[6 + selector_length + 3];
-      print_string("    - text_char:", &descriptor[6 + selector_length + 4], text_length, PRINT_LEVEL_0);
-    }
-    else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST_ID)
-    {
-      data_broadcast_id = READ_16BITS(&descriptor[2]);
-      print_output("    - data_broadcast_id: 0x%X (%lu)\n",
-                   data_broadcast_id, data_broadcast_id);
-      print_buffer("    - id_selector_byte: ", &descriptor[4], descriptor_length - 2, PRINT_LEVEL_0);
-    }
-    else if (descriptor_tag == DESCRIPTOR_TAG_CAROUSEL_IDENTIFIER)
-    {
-      carousel_id = READ_32BITS(&descriptor[2]);
-      print_output("    - carousel_id: 0x%08X (%lu)\n",
-                   carousel_id, carousel_id);
-      format_id = descriptor[6];
-
-      if (format_id == 0)
-      {
-        print_output("    - no format specifier\n");
-      }
-      else if (format_id == 1)
-      {
-        print_output("    - format_specifier:\n");
-        print_output("        module version: 0x%X\n", descriptor[7]);
-        print_output("        module id: 0x%X\n", READ_16BITS(&descriptor[8]));
-        print_output("        block size: %lu\n", READ_16BITS(&descriptor[10]));
-        print_output("        module size: %lu\n", READ_32BITS(&descriptor[12]));
-        print_output("        original size: %u\n", descriptor[16]);
-        print_output("        timeout: %lus\n", READ_32BITS(&descriptor[17]));
-        print_buffer("        object key data: ", &descriptor[22], descriptor[21], PRINT_LEVEL_0);
-      }
-    }
-    else
-    {
-      dump_buffer(get_descriptor_name(descriptor_tag),
-                  descriptor,
-                  descriptor_length,
-                  PRINT_LEVEL_1);
-    }
   }
 }
 
@@ -3100,6 +3049,134 @@ static void print_application_signalling_descriptor(const uint8_t *descriptor)
 }
 
 /*
+** DSM-CC tools
+*/
+
+static void print_dsmcc_descriptors(const uint8_t *descriptors, uint16_t info_length)
+{
+  const uint8_t *descriptor = descriptors;
+  uint32_t carousel_id;
+  uint16_t len;
+  uint16_t data_broadcast_id;
+  uint8_t  selector_length;
+  uint8_t  text_length;
+  uint8_t  component_tag;
+  uint8_t  format_id;
+  uint8_t  descriptor_tag;
+  uint8_t  descriptor_length;
+
+  print_output("\nList of descriptors related to DSMCC (length = %u)\n", info_length);
+
+  for (len  = 0;
+       len  < info_length;
+       len += descriptor_length, descriptor += 2 + descriptor_length)
+  {
+    descriptor_tag = descriptor[0];
+    descriptor_length = descriptor[1];
+
+    print_output("  - descriptor 0x%X (%s)\n",
+                 descriptor_tag,
+                 get_descriptor_name(descriptor_tag));
+
+    if (descriptor_tag == DESCRIPTOR_TAG_STREAM_IDENTIFIER)
+    {
+      component_tag = descriptor[2];
+      print_output("    - component_tag: 0x%X (%lu)\n",
+                   component_tag, component_tag);
+    }
+    else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST)
+    {
+      data_broadcast_id = READ_16BITS(&descriptor[2]);
+      print_output("    - data_broadcast_id: 0x%X (%lu)\n",
+                   data_broadcast_id, data_broadcast_id);
+      component_tag = descriptor[4];
+      print_output("    - component_tag: 0x%X (%lu)\n",
+                   component_tag, component_tag);
+      selector_length = descriptor[5];
+      print_buffer("    - selector_byte:", &descriptor[6], selector_length, PRINT_LEVEL_0);
+      print_output("    - ISO_639_language_code: %02X%02X%02X (%c%c%c)",
+                   descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2],
+                   descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2]);
+      text_length = descriptor[6 + selector_length + 3];
+      print_string("    - text_char:", &descriptor[6 + selector_length + 4], text_length, PRINT_LEVEL_0);
+    }
+    else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST_ID)
+    {
+      data_broadcast_id = READ_16BITS(&descriptor[2]);
+      print_output("    - data_broadcast_id: 0x%X (%lu)\n",
+                   data_broadcast_id, data_broadcast_id);
+      print_buffer("    - id_selector_byte: ", &descriptor[4], descriptor_length - 2, PRINT_LEVEL_0);
+    }
+    else if (descriptor_tag == DESCRIPTOR_TAG_CAROUSEL_IDENTIFIER)
+    {
+      carousel_id = READ_32BITS(&descriptor[2]);
+      print_output("    - carousel_id: 0x%08X (%lu)\n",
+                   carousel_id, carousel_id);
+      format_id = descriptor[6];
+
+      if (format_id == 0)
+      {
+        print_output("    - no format specifier\n");
+      }
+      else if (format_id == 1)
+      {
+        print_output("    - format_specifier:\n");
+        print_output("        module version: 0x%X\n", descriptor[7]);
+        print_output("        module id: 0x%X\n", READ_16BITS(&descriptor[8]));
+        print_output("        block size: %lu\n", READ_16BITS(&descriptor[10]));
+        print_output("        module size: %lu\n", READ_32BITS(&descriptor[12]));
+        print_output("        original size: %u\n", descriptor[16]);
+        print_output("        timeout: %lus\n", READ_32BITS(&descriptor[17]));
+        print_buffer("        object key data: ", &descriptor[22], descriptor[21], PRINT_LEVEL_0);
+      }
+    }
+    else
+    {
+      dump_buffer(get_descriptor_name(descriptor_tag),
+                  descriptor,
+                  descriptor_length,
+                  PRINT_LEVEL_1);
+    }
+  }
+}
+
+static void show_dsmcc(const uint8_t *packet, uint16_t pid)
+{
+  uint8_t table_id;
+  uint16_t table_id_extension;
+
+  table_id = READ_08BITS(&packet[0]);
+  table_id_extension = READ_16BITS(&packet[3]);
+
+  print_output("DSMCC packet on pid 0x%X (%u)\n",
+               pid, pid);
+
+  if (table_id == TID_DSMCC_UN)
+  {
+    print_output("  table_id: 0x%X (%s)\n",
+                 table_id, "User-Network message");
+    print_output("  message: %s\n",
+                 table_id_extension == 1 ? "DSI" :
+                 table_id_extension == 3 ? "DII" :
+                 "???");
+  }
+  else if (table_id == TID_DSMCC_DD)
+  {
+    print_output("  table_id: 0x%X (%s)\n",
+                 table_id, "Download-Data message");
+    print_output("  module_id: 0x%X (%u)\n",
+                 table_id_extension, table_id_extension);
+  }
+  else
+  {
+    dump_buffer("dsmcc section (2)", packet, 32, PRINT_LEVEL_0);
+  }
+
+  // TODO: show more
+  print_output("\n");
+}
+
+/*
 ** Unique PID stream
 */
 
@@ -3692,7 +3769,7 @@ static void parse_ts(const char        *filename,
       {
         uint16_t extended_table_id;
 
-        section = get_section(packet, TRUE);
+        section = get_section(packet, FALSE, TRUE);
         if (NULL == section)
         {
           extended_table_id = 0xFFFF;
@@ -3742,7 +3819,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == PID_PAT)
     {
-      section = get_section(packet, FALSE);
+      section = get_section(packet, FALSE, FALSE);
       if (NULL != section)
       {
         payload = get_pat_payload(section, &pat_header);
@@ -3805,7 +3882,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == target_prog->pmt_pid)
     {
-      section = get_section(packet, FALSE);
+      section = get_section(packet, FALSE, FALSE);
       if (NULL != section)
       {
         payload = get_pmt_payload(section, &pmt_header);
@@ -3873,7 +3950,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == PID_SDT)
     {
-      section = get_section(packet, FALSE);
+      section = get_section(packet, FALSE, FALSE);
       if (NULL != section)
       {
         payload = get_sdt_payload(section, &sdt_header);
@@ -3899,7 +3976,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == PID_TDT || pid == PID_TOT)
     {
-      section = get_section(packet, FALSE);
+      section = get_section(packet, FALSE, FALSE);
       if (NULL != section)
       {
         if (get_utc_time(section, &utc_time, &section_length))
@@ -3962,16 +4039,21 @@ static void parse_ts(const char        *filename,
               IS_ACTIVE(command, SET_AIT_URL) ||
               IS_ACTIVE(command, SET_AIT_DSMCC)))
     {
-      section = get_section(packet, FALSE);
-      patch_level |= parse_ait(section, ait, &section_length)
-                   ? PATCH_LEVEL_PACKET_AND_CRC : PATCH_LEVEL_NONE;
-      /* Dont want to increment the version number in this case */
+      section = get_section(packet, FALSE, FALSE);
+      if (NULL != section)
+      {
+        patch_level |= parse_ait(section, ait, &section_length)
+                     ? PATCH_LEVEL_PACKET_AND_CRC : PATCH_LEVEL_NONE;
+        /* Dont want to increment the version number in this case */
+      }
     }
     else if (pid == target_prog->dsmcc_pid)
     {
-      /*
-      ** TODO: show something, anything, but something, and quick
-      */
+      section = get_section(packet, TRUE, FALSE);
+      if (NULL != section)
+      {
+        show_dsmcc(section, pid);
+      }
     }
 
     /*
