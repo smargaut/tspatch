@@ -41,14 +41,15 @@ typedef unsigned long  uint32_t;
 #define READ_15BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0x7FFF)
 #define READ_13BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0x1FFF)
 #define READ_12BITS(p)      ((                                                          (((uint16_t)(p)[0]) << 8) | ((uint16_t)(p)[1])) & 0x0FFF)
-#define READ_08BITS(p)      ((                                                                                      ((uint16_t)(p)[0])) & 0xFF)
+#define READ_08BITS(p)      ((                                                                                      ((uint8_t) (p)[0])) & 0xFF)
 #define READ_VERSION(p)     ((((p)[0]) & 0x3E) >> 1)
-/*
-** TODO: develop and use these macros
-*/
-#define WRITE_16BITS(p,v)   ()
-#define WRITE_12BITS(p,v)   ()
-#define WRITE_08BITS(p,v)   ()
+#define WRITE_32BITS(p,v)   (p)[0] = (uint8_t)(((v) >> 24) & 0xFF); (p)[1] = (uint8_t)(((v) >> 16) & 0xFF); (p)[2] = (uint8_t)(((v) >> 8) & 0xFF); (p)[3] = (uint8_t)((v) & 0xFF)
+#define WRITE_24BITS(p,v)                                           (p)[0] = (uint8_t)(((v) >> 16) & 0xFF); (p)[1] = (uint8_t)(((v) >> 8) & 0xFF); (p)[2] = (uint8_t)((v) & 0xFF)
+#define WRITE_16BITS(p,v)                                                                                   (p)[0] = (uint8_t)(((v) >> 8) & 0xFF); (p)[1] = (uint8_t)((v) & 0xFF)
+#define WRITE_13BITS(p,v)                                                                                   (p)[0] = (uint8_t)(((v) >> 8) & 0x1F); (p)[1] = (uint8_t)((v) & 0xFF)
+#define WRITE_12BITS(p,v)                                                                                   (p)[0] = (uint8_t)(((v) >> 8) & 0x0F); (p)[1] = (uint8_t)((v) & 0xFF)
+#define WRITE_08BITS(p,v)                                                                                                                          (p)[0] = (uint8_t)((v) & 0xFF)
+#define WRITE_VERSION(p,v)  (p)[0] = ((p)[0] & 0xC1) + (((v) & 0x1F) << 1)
 
 /****************************/
 /*** MACROS & TYPES: MPEG ***/
@@ -376,7 +377,7 @@ static void init_ait(ait_t *ait)
 }
 
 /*************/
-/*** DEBUG ***/
+/*** PRINT ***/
 /*************/
 
 /*
@@ -384,13 +385,32 @@ static void init_ait(ait_t *ait)
 **       also, add -v -vv -vvv options to command line
 **
 **       really, review log levels, it's a real mess
+**
+**       at last, review assert and exit usages
+**
+**       oh, another 'at last': harmonize comments (C style or C++)
+**       first idea was to reserve C++ style comments for code that is disabled,
+**       but kept to show an alternative implementation
+**       while C style comments were real comments
+*        but C++ style comments are more convenient, so usage has been deviant
 */
 
-#define print_error  printf
-#define print_info   printf
-#define print_debug
-#define print_output printf
-#define print_user   printf
+#define print_output printf // TODO: remove me
+
+#define PRINT_LEVEL_0 (0) // must print, always, whatever the weather is
+#define PRINT_LEVEL_1 (1) // more info
+#define PRINT_LEVEL_2 (2) // more details, risk to be flooded
+#define PRINT_LEVEL_3 (3) // reserved for the debug of the code
+
+static unsigned print_level = 0;
+
+#define print0 printf
+#define print1 (print_level >= PRINT_LEVEL_1) && printf
+#define print2 (print_level >= PRINT_LEVEL_2) && printf
+#define print3 (print_level >= PRINT_LEVEL_3) && printf
+
+#define print_error0 printf
+#define print_error1 (print_level >= PRINT_LEVEL_1) && printf
 
 static char get_printable_character(uint8_t c)
 {
@@ -404,41 +424,50 @@ static char get_printable_character(uint8_t c)
 
 static void print_string(const char    *header,
                          const uint8_t *buffer,
-                         unsigned       size)
+                         unsigned       size,
+                         unsigned       level)
 {
   unsigned i;
 
-  if (header != NULL)
+  if (print_level >= level)
   {
-    print_output("%s", header);
+    if (header != NULL)
+    {
+      print0("%s", header);
+    }
+    for (i = 0; i < size; i++)
+    {
+      print0("%c", get_printable_character(buffer[i]));
+    }
+    print0("\n");
   }
-  for (i = 0; i < size; i++)
-  {
-    print_output("%c", get_printable_character(buffer[i]));
-  }
-  print_output("\n");
 }
 
 static void print_buffer(const char    *header,
                          const uint8_t *buffer,
-                         unsigned       size)
+                         unsigned       size,
+                         unsigned       level)
 {
   unsigned i;
 
-  if (header != NULL)
+  if (print_level >= level)
   {
-    print_output("%s", header);
+    if (header != NULL)
+    {
+      print0("%s", header);
+    }
+    for (i = 0; i < size; i++)
+    {
+      print0("%02X ", buffer[i]);
+    }
+    print0("\n");
   }
-  for (i = 0; i < size; i++)
-  {
-    print_output("%02X ", buffer[i]);
-  }
-  print_output("\n");
 }
 
 static void dump_buffer(const char    *comment,
                         const uint8_t *buffer,
-                        unsigned       size)
+                        unsigned       size,
+                        unsigned       level)
 {
   const char *space;
   const char *space0 = "";
@@ -448,33 +477,36 @@ static void dump_buffer(const char    *comment,
   const unsigned step = 16;
   unsigned i, j;
 
-  print_output("\nDUMP BUFFER (size = %u): %s\n",
-               size, comment == NULL ? "" : comment);
-
-  for (i = 0; i < size; i += step)
+  if (print_level >= level)
   {
-    print_output("  0x%04X:", i);
-    for (j= 0; j < step; j++)
+    print0("\nDUMP BUFFER (size = %u): %s\n",
+           size, comment == NULL ? "" : comment);
+
+    for (i = 0; i < size; i += step)
     {
-      space = (j == step / 2) ? space2 : space1;
-      if ((i + j) < size)
+      print0("  0x%04X:", i);
+      for (j= 0; j < step; j++)
       {
-        print_output("%s%02X", space, buffer[i + j]);
+        space = (j == step / 2) ? space2 : space1;
+        if ((i + j) < size)
+        {
+          print0("%s%02X", space, buffer[i + j]);
+        }
+        else
+        {
+          print0("%s  ", space);
+        }
       }
-      else
+      print0("  ");
+      for (j= 0; (j < step) && ((i + j) < size); j++)
       {
-        print_output("%s  ", space);
+        space = (j == step / 2) ? space1 : space0;
+        print0("%s%c", space, get_printable_character(buffer[i + j]));
       }
+      print0("\n");
     }
-    print_output("  ");
-    for (j= 0; (j < step) && ((i + j) < size); j++)
-    {
-      space = (j == step / 2) ? space1 : space0;
-      print_output("%s%c", space, get_printable_character(buffer[i + j]));
-    }
-    print_output("\n");
+    print0("\n");
   }
-  print_output("\n");
 }
 
 /************/
@@ -484,13 +516,6 @@ static void dump_buffer(const char    *comment,
 /*
 ** Misc tools
 */
-
-static void write_12bits(uint8_t *stream, uint16_t value)
-{
-  stream[0] = (stream[0] & 0xF0)
-            | (uint8_t)(value >> 8) & 0x0F;
-  stream[1] = (uint8_t)(value & 0x00FF);
-}
 
 static void close_file(FILE *file)
 {
@@ -510,25 +535,21 @@ static uint32_t get_file_size(const char *filename)
   file = fopen(filename, "rb");
   if (file == NULL)
   {
-    print_user("%s: cannot open %s\n",
-               __FUNCTION__, filename);
+    print_error0("ERROR: cannot open %s\n", filename);
     return 0;
   }
 
   ret = fseek(file, 0, SEEK_END);
   if (0 != ret)
   {
-    print_user("%s: cannot seek in %s\n",
-               __FUNCTION__, filename);
+    print_error0("ERROR: cannot seek in %s\n", filename);
     return 0;
   }
 
   size = ftell(file);
-
   if (size < 0)
   {
-    print_user("%s: cannot tell in %s\n",
-               __FUNCTION__, filename);
+    print_error0("ERROR: cannot tell in %s\n", filename);
     return 0;
   }
 
@@ -545,9 +566,8 @@ static uint16_t get_pid(const uint8_t *packet)
 {
   if (TS_SYNCHRO_BYTE != packet[0])
   { 
-    print_error("%s: lost synchro, got 0x%02X instead of 0x%02X\n",
-                __FUNCTION__,
-                packet[0], TS_SYNCHRO_BYTE);
+    print_error0("ERROR: lost synchro, got 0x%02X instead of 0x%02X\n",
+                 packet[0], TS_SYNCHRO_BYTE);
     return INVALID_PID;
   }
 
@@ -560,6 +580,7 @@ static bool_t set_pid(uint8_t *packet, uint16_t pid)
   {
     packet[1] = (uint8_t)((0x1F00 & pid) >> 8) | (0xE0 & packet[1]);
     packet[2] = (uint8_t)((0x00FF & pid) >> 0);
+    // TODO: change WRITE_13BITS macro to keep the 3 first bits
     return TRUE;
   }
   return FALSE;
@@ -576,11 +597,11 @@ static bool_t toggle_tsc_bits(uint8_t *packet)
 
   if (0 == print_done)
   {
-    print_info("toggle TSC bits from %c%c to %c%c\n",
-               (old_tsc & 0x80) ? '1' : '0',
-               (old_tsc & 0x40) ? '1' : '0',
-               (new_tsc & 0x80) ? '1' : '0',
-               (new_tsc & 0x40) ? '1' : '0');
+    print1("toggle TSC bits from %c%c to %c%c\n",
+           (old_tsc & 0x80) ? '1' : '0',
+           (old_tsc & 0x40) ? '1' : '0',
+           (new_tsc & 0x80) ? '1' : '0',
+           (new_tsc & 0x40) ? '1' : '0');
     print_done = 1;
   }
 
@@ -635,7 +656,7 @@ static bool_t read_pcr(const uint8_t *packet, pcr_t *pcr)
 
 static const char *get_section_name(uint16_t pid, uint8_t table_id);
 
-static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
+static uint8_t *get_section(const uint8_t *packet, bool_t try)
 {
   uint16_t pid;
   uint16_t section_length;
@@ -663,9 +684,13 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
 
   if (adaptation_field_length > (TS_PACKET_SIZE - 4))
   {
-    if (! try)
+    if (try)
     {
-      print_error("%s: invalid adaptation field\n", __FUNCTION__);
+      print_error1("invalid adaptation field\n");
+    }
+    else
+    {
+      print_error0("invalid adaptation field\n");
     }
     return NULL;
   }
@@ -678,9 +703,13 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
 
   if (pointer_field > (TS_PACKET_SIZE - 4))
   {
-    if (! try)
+    if (try)
     {
-      print_error("%s: invalid pointer field\n", __FUNCTION__);
+      print_error1("invalid pointer field\n");
+    }
+    else
+    {
+      print_error0("invalid pointer field\n");
     }
     return NULL;
   }
@@ -691,17 +720,18 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
   section_length = READ_12BITS(&packet[1]);
   if (section_length > 1024)
   {
-    if (! try)
+    if (try)
     {
-      print_error("%s: invalid section length\n", __FUNCTION__);
+      print_error1("invalid section length\n");
+    }
+    else
+    {
+      print_error0("invalid section length\n");
     }
     return NULL;
   }
 
-  if (dump)
-  {
-    dump_buffer(get_section_name(pid, packet[0]), packet, section_length + 3);
-  }
+  dump_buffer(get_section_name(pid, packet[0]), packet, section_length + 3, PRINT_LEVEL_2);
 
   if (try)
   {
@@ -715,13 +745,12 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try, bool_t dump)
   {
     /* This function pertains to MPEG packet level,  */
     /* but DVB table id is tested, this is an heresy */
-    print_debug("%s: TDT section has no CRC\n",
-                __FUNCTION__);
+    print2("TDT section has no CRC\n");
   }
   else if (! check_crc32(packet, (unsigned)section_length))
   {
-    print_error("%s: CRC error on TID 0x%X (%u)\n",
-                __FUNCTION__, packet[0], packet[0]);
+    print0("CRC error on TID 0x%X (%u)\n",
+           packet[0], packet[0]);
     return NULL;
   }
 
@@ -970,9 +999,8 @@ static void init_crc(void)
     crc32_table[i] = k;
   }
 
-  print_debug("%s: compare crc32 tables : %d\n",
-              __FUNCTION__,
-              memcmp(crc32_table, const_crc32_table, sizeof (crc32_table)));
+  print3("compare crc32 tables : %d\n",
+         memcmp(crc32_table, const_crc32_table, sizeof (crc32_table)));
 }
 
 static uint32_t get_crc_v1(const uint8_t *buffer, unsigned length)
@@ -1018,11 +1046,10 @@ static bool_t check_crc32(const uint8_t *buffer, unsigned length)
   found_crc = get_crc_v2(0, buffer, length);
 #endif
 
-  read_crc = READ_32BITS(buffer);
+  read_crc = READ_32BITS(&buffer[length]);
 
-  print_debug("%s: read CRC 0x%X and found 0x%X\n",
-              __FUNCTION__,
-               read_crc, found_crc);
+  print2("read CRC 0x%X and found 0x%X\n",
+         read_crc, found_crc);
 
   return read_crc == found_crc;
 }
@@ -1033,14 +1060,9 @@ static void update_crc32(uint8_t *buffer, unsigned length)
 
   crc = get_crc_v2(0, buffer, length);
 
-  buffer[length + 0] = (uint8_t)((crc >> 24) & 0xFF);
-  buffer[length + 1] = (uint8_t)((crc >> 16) & 0xFF);
-  buffer[length + 2] = (uint8_t)((crc >>  8) & 0xFF);
-  buffer[length + 3] = (uint8_t)((crc >>  0) & 0xFF);
+  WRITE_32BITS(&buffer[length], crc);
 
-  print_debug("%s: update crc32 0x%08lX\n",
-              __FUNCTION__,
-              crc);
+  print2("update crc32 0x%08lX\n", crc);
 }
 
 static void increment_version_number(uint8_t *section)
@@ -1056,12 +1078,10 @@ static void increment_version_number(uint8_t *section)
   {
     version_number = 1;
   }
-  section[5] &= 0xC1;
-  section[5] |= version_number << 1;
+  WRITE_VERSION(&section[5], version_number);
 
-  print_info("%s: update version number 0x%X (%u)\n",
-             __FUNCTION__,
-             version_number, version_number);
+  print2("update version number 0x%X (%u)\n",
+         version_number, version_number);
 }
 
 static const char *get_section_name(uint16_t pid, uint8_t table_id)
@@ -1261,9 +1281,8 @@ static const uint8_t *get_pat_payload(const uint8_t *section,
 {
   if (TID_PAT != section[0])
   {
-    print_error("%s: not a PAT, TID=0x%02X (%u)\n",
-                __FUNCTION__,
-                section[0], section[0]);
+    print_error1("ERROR: not a PAT, TID=0x%02X (%u)\n",
+                 section[0], section[0]);
     return NULL;
   }
 
@@ -1271,9 +1290,8 @@ static const uint8_t *get_pat_payload(const uint8_t *section,
 
   if (header->section_length < PAT_MINIMUM_LENGTH)
   {
-    print_error("%s: the PAT does not contain any program (len=%d)\n",
-                __FUNCTION__,
-                header->section_length);
+    print0("the PAT does not contain any program (len=%d)\n",
+           header->section_length);
     return NULL;
   }
 
@@ -1296,12 +1314,10 @@ static bool_t patch_pat_header(pat_header_t *header,
                                const prog_t *new_prog,
                                uint8_t      *section)
 {
-  print_info("%s: replace transport stream id 0x%X by 0x%X\n",
-             __FUNCTION__,
-             target_prog->tsid, new_prog->tsid);
+  print2("replace transport stream id 0x%X by 0x%X\n",
+         target_prog->tsid, new_prog->tsid);
 
-  section[3] = (uint8_t)((0xFF00 & new_prog->tsid) >> 8);
-  section[4] = (uint8_t)((0x00FF & new_prog->tsid) >> 0);
+  WRITE_16BITS(&section[3], new_prog->tsid);
 
   header->transport_stream_id = new_prog->tsid;
 
@@ -1327,21 +1343,18 @@ static bool_t patch_pat_program(const pat_header_t *header,
     {
       if (INVALID_PROGRAM_NUMBER != new_prog->number)
       {
-        print_info("%s: replace program number 0x%X (%u) by 0x%X (%u)\n",
-                   __FUNCTION__,
-                   target_prog->number, target_prog->number,
-                   new_prog->number, new_prog->number);
+        print2("replace program number 0x%X (%u) by 0x%X (%u)\n",
+               target_prog->number, target_prog->number,
+               new_prog->number, new_prog->number);
 
-        program[0] = (uint8_t)((0xFF00 & new_prog->number) >> 8);
-        program[1] = (uint8_t)((0x00FF & new_prog->number) >> 0);
+        WRITE_16BITS(&program[0], new_prog->number);
       }
 
       if (INVALID_PID != new_prog->pmt_pid)
       {
-        print_info("%s: set pmt pid to 0x%X (%u) for program number 0x%X (%u)\n",
-                   __FUNCTION__,
-                   new_prog->pmt_pid, new_prog->pmt_pid,
-                   target_prog->number, target_prog->number);
+        print2("set pmt pid to 0x%X (%u) for program number 0x%X (%u)\n",
+               new_prog->pmt_pid, new_prog->pmt_pid,
+               target_prog->number, target_prog->number);
 
         program[2] = (0xE0 & program[2])
                    | (uint8_t)((0x1F00 & new_prog->pmt_pid) >> 8);
@@ -1375,10 +1388,9 @@ static uint16_t get_pmt_pid(const pat_header_t *header,
     }
   }
 
-  print_debug("%s: program number 0x%X (%u) not found\n",
-              __FUNCTION__,
-              target_program_number,
-              target_program_number);
+  print1("program number 0x%X (%u) not found\n",
+         target_program_number,
+         target_program_number);
 
   return INVALID_PID;
 }
@@ -1399,15 +1411,14 @@ static bool_t get_first_program(const pat_header_t *header,
 
     if (0 != first_prog->number)
     {
-      print_info("%s: got program number 0x%X (%u) with PMT PID 0x%X (%u)\n",
-                  __FUNCTION__,
-                  first_prog->number, first_prog->number,
-                  first_prog->pmt_pid, first_prog->pmt_pid);
+      print1("got program number 0x%X (%u) with PMT PID 0x%X (%u)\n",
+             first_prog->number, first_prog->number,
+             first_prog->pmt_pid, first_prog->pmt_pid);
       return TRUE;
     }
   }
 
-  print_info("%s: no program available\n", __FUNCTION__);
+  print1("no program available\n");
 
   return FALSE;
 }
@@ -1448,6 +1459,7 @@ static void show_pat(const pat_header_t *header,
                    pid, pid);
     }
   }
+  print_output("\n");
 }
 
 /*
@@ -1558,9 +1570,7 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
 
   if (TID_PMT != section[0])
   {
-    print_error("%s: not a PMT, TID=0x%02X\n",
-                __FUNCTION__,
-                section[0]);
+    print_error1("ERROR: not a PMT, TID=0x%02X\n", section[0]);
     return NULL;
   }
 
@@ -1568,9 +1578,8 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
 
   if (header->section_length < PMT_MINIMUM_LENGTH)
   {
-     print_error("%s: the PMT does not contain any ES (len=%d)\n",
-                 __FUNCTION__,
-                 header->section_length);
+     print0("the PMT does not contain any ES (len=%d)\n",
+            header->section_length);
      return NULL;
   }
 
@@ -1610,13 +1619,11 @@ static bool_t patch_pmt_header(pmt_header_t *header,
                                const prog_t *new_prog,
                                uint8_t      *section)
 {
-  print_info("%s: replace program number 0x%X (%u) by 0x%X (%u)\n",
-             __FUNCTION__,
-             target_prog->number, target_prog->number,
-             new_prog->number, new_prog->number);
+  print2("replace program number 0x%X (%u) by 0x%X (%u)\n",
+         target_prog->number, target_prog->number,
+         new_prog->number, new_prog->number);
 
-  section[3] = (uint8_t)((0xFF00 & new_prog->number) >> 8);
-  section[4] = (uint8_t)((0x00FF & new_prog->number) >> 0);
+  WRITE_16BITS(&section[3], new_prog->number);
 
   header->program_number = new_prog->number;
 
@@ -1844,19 +1851,19 @@ static void print_dsmcc_descriptors(const uint8_t *descriptors, uint16_t info_le
       print_output("    - component_tag: 0x%X (%lu)\n",
                    component_tag, component_tag);
       selector_length = descriptor[5];
-      print_buffer("    - selector_byte:", &descriptor[6], selector_length);
+      print_buffer("    - selector_byte:", &descriptor[6], selector_length, PRINT_LEVEL_0);
       print_output("    - ISO_639_language_code: %02X%02X%02X (%c%c%c)",
                    descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2],
                    descriptor[6 + selector_length + 0], descriptor[6 + selector_length + 1], descriptor[6 + selector_length + 2]);
       text_length = descriptor[6 + selector_length + 3];
-      print_string("    - text_char:", &descriptor[6 + selector_length + 4], text_length);
+      print_string("    - text_char:", &descriptor[6 + selector_length + 4], text_length, PRINT_LEVEL_0);
     }
     else if (descriptor_tag == DESCRIPTOR_TAG_DATA_BROADCAST_ID)
     {
       data_broadcast_id = READ_16BITS(&descriptor[2]);
       print_output("    - data_broadcast_id: 0x%X (%lu)\n",
                    data_broadcast_id, data_broadcast_id);
-      print_buffer("    - id_selector_byte: ", &descriptor[4], descriptor_length - 2);
+      print_buffer("    - id_selector_byte: ", &descriptor[4], descriptor_length - 2, PRINT_LEVEL_0);
     }
     else if (descriptor_tag == DESCRIPTOR_TAG_CAROUSEL_IDENTIFIER)
     {
@@ -1878,14 +1885,15 @@ static void print_dsmcc_descriptors(const uint8_t *descriptors, uint16_t info_le
         print_output("        module size: %lu\n", READ_32BITS(&descriptor[12]));
         print_output("        original size: %u\n", descriptor[16]);
         print_output("        timeout: %lus\n", READ_32BITS(&descriptor[17]));
-        print_buffer("        object key data: ", &descriptor[22], descriptor[21]);
+        print_buffer("        object key data: ", &descriptor[22], descriptor[21], PRINT_LEVEL_0);
       }
     }
     else
     {
       dump_buffer(get_descriptor_name(descriptor_tag),
                   descriptor,
-                  descriptor_length);
+                  descriptor_length,
+                  PRINT_LEVEL_1);
     }
   }
 }
@@ -1944,9 +1952,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
   if (TID_SDT_ACTUAL != section[0])
   //if (TID_SDT_ACTUAL != section[0] && TID_SDT_OTHER != section[0])
   {
-    print_error("%s: not a SDT, TID=%d (0x%02X)\n",
-                __FUNCTION__,
-                section[0], section[0]);
+    print_error1("not a SDT, TID=%d (0x%02X)\n",
+                 section[0], section[0]);
     return NULL;
   }
 
@@ -1954,16 +1961,15 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
 
   if (header->section_length < SDT_MINIMUM_LENGTH)
   {
-    print_error("%s: the SDT is not correct (len=%d)\n",
-                __FUNCTION__,
-                header->section_length);
+    print0("the SDT is not correct (len=%d)\n",
+           header->section_length);
     return NULL;
   }
 
   if (header->section_length == SDT_MINIMUM_LENGTH)
   {
-    print_error("%s: the SDT does not contain any service\n",
-                __FUNCTION__);
+    print0("the SDT does not contain any service (len=%d)\n",
+           header->section_length);
     return NULL;
   }
 
@@ -1990,9 +1996,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
   {
     if (loop_size < SDT_LOOP_MINIMUM_SIZE)
     {
-      print_error("%s: SDT loop (size = %d) not complete\n",
-                  __FUNCTION__,
-                  loop_size);
+      print_error0("SDT loop (size = %d) not complete\n",
+                   loop_size);
       return NULL;
     }
     loop_size -= SDT_LOOP_MINIMUM_SIZE;
@@ -2001,8 +2006,7 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
 
     if (loop_size < descriptors_loop_length)
     {
-      print_error("%s: SDT descriptors loop not complete\n",
-                  __FUNCTION__);
+      print_error0("ERROR: SDT descriptors loop not complete\n");
       return NULL;
     }
     loop_size -= descriptors_loop_length;
@@ -2091,8 +2095,7 @@ static void show_sdt(const sdt_header_t *header,
       }
       else
       {
-        print_error("%s: SDT loop error\n",
-                    __FUNCTION__);
+        print_error1("ERROR: SDT loop is not correct\n");
         descriptors_loop_length = 0;
       }
     }
@@ -2191,10 +2194,10 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
         */
         remaining_len -= service_provider_name_length;
         memcpy(buffer, spn + service_provider_name_length, remaining_len);
-        //dump_buffer("saved section remaining", buffer, remaining_len);
+        dump_buffer("saved section remaining", buffer, remaining_len, PRINT_LEVEL_3);
         memcpy(spn, new_svc->name, strlen(new_svc->name));
         memcpy(spn + strlen(new_svc->name), buffer, remaining_len);
-        //dump_buffer("before length fields patches", section, TS_PACKET_SIZE - 4);
+        dump_buffer("before length fields patches", section, TS_PACKET_SIZE - 4, PRINT_LEVEL_3);
 
         /*
         ** Update all length fields
@@ -2234,7 +2237,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
           sl[0]  = (sl[0] & 0xF0) | ((*section_length >> 8) & 0x0F);
           sl[1]  = *section_length & 0xFF;
         }
-        //dump_buffer("after length fields patches", section, TS_PACKET_SIZE - 4);
+        dump_buffer("after length fields patches", section, TS_PACKET_SIZE - 4, PRINT_LEVEL_3);
 
         return TRUE;
       }
@@ -2297,9 +2300,8 @@ static bool_t get_utc_time(const uint8_t *section,
 
   *section_length = READ_12BITS(&section[1]);
 
-  print_debug("%s: UTC time = %02X%02X%02X%02X%02X\n",
-              __FUNCTION__,
-              section[3], section[4], section[5], section[6], section[7]);
+  print2("UTC time = %02X%02X%02X%02X%02X\n",
+         section[3], section[4], section[5], section[6], section[7]);
 
   mjd = READ_16BITS(&section[3]);
   year = ((double)mjd - 15078.2) / 365.25;
@@ -2352,9 +2354,8 @@ static bool_t patch_utc_time(uint8_t           *section,
   section[6] = GET_BCD_FROM_DECIMAL(new_time->minute);
   section[7] = GET_BCD_FROM_DECIMAL(new_time->second);
 
-  print_debug("%s: new UTC time = %02X%02X%02X%02X%02X\n",
-              __FUNCTION__,
-              section[3], section[4], section[5], section[6], section[7]);
+  print2("new UTC time = %02X%02X%02X%02X%02X\n",
+         section[3], section[4], section[5], section[6], section[7]);
 
   return TRUE;
 }
@@ -2449,7 +2450,7 @@ static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
   static
   uint8_t  buffer[TS_PACKET_SIZE - 4];       /* temporary buffer where the section is stored */
 
-  //dump_buffer("before ait patch", s1, 184);
+  dump_buffer("before ait patch", s1, 184, PRINT_LEVEL_3);
 
   new_url_len = strlen(new_url);
   index = s2 - s1 + len->patch;              /* end of replaced string position */
@@ -2479,7 +2480,7 @@ static void patch_ait_url(uint8_t      *s1,      /* begining of the section */
 
   len->patch = new_url_len;
 
-  //dump_buffer("after ait patch", s1, 184);
+  dump_buffer("after ait patch", s1, 184, PRINT_LEVEL_3);
 }
 
 static bool_t parse_ait(uint8_t     *section,
@@ -2589,8 +2590,7 @@ static bool_t parse_ait(uint8_t     *section,
       print_output("  replace application_id 0x%04X by 0x%04X\n\n",
                    application_id, new_ait->id);
       application_id = new_ait->id;
-      s[0] = (uint8_t)((0xFF00 & application_id) >> 8);
-      s[1] = (uint8_t)((0x00FF & application_id) >> 0);
+      WRITE_16BITS(s, application_id);
       patch = TRUE;
       s += 2;
     }
@@ -2728,7 +2728,7 @@ static bool_t parse_ait(uint8_t     *section,
 
             if (show)
             {
-              print_string(NULL, s, application_name_length);
+              print_string(NULL, s, application_name_length, PRINT_LEVEL_0);
             }
 
             k += 4;
@@ -2793,9 +2793,9 @@ static bool_t parse_ait(uint8_t     *section,
 
               s[0] = URL_base_length;
               descriptor_length_position[0] = descriptor_length;
-              write_12bits(application_descriptors_loop_length_position, application_descriptors_loop_length);
-              write_12bits(application_loop_length_position, application_loop_length);
-              write_12bits(section_length_position, section_length);
+              WRITE_12BITS(application_descriptors_loop_length_position, application_descriptors_loop_length);
+              WRITE_12BITS(application_loop_length_position, application_loop_length);
+              WRITE_12BITS(section_length_position, section_length);
             }
           }
           else
@@ -2805,8 +2805,7 @@ static bool_t parse_ait(uint8_t     *section,
             protocol_id = 3;
             print_output("      * change protocol_id to 0x%04X\n", protocol_id);
             s -= 3;
-            s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
-            s[1] = (uint8_t)((protocol_id >> 0) & 0xFF);
+            WRITE_16BITS(s, protocol_id);
             /* don't change transport_protocol_label */
             s += 3;
 
@@ -2856,8 +2855,7 @@ static bool_t parse_ait(uint8_t     *section,
                          new_ait->tpl, transport_protocol_label, descriptor_tag);
             transport_protocol_label = new_ait->tpl;
             s -= 3;
-            s[0] = (uint8_t)((protocol_id >> 8) & 0xFF);
-            s[1] = (uint8_t)((protocol_id >> 0) & 0xFF);
+            WRITE_16BITS(s, protocol_id);
             s[2] = transport_protocol_label;
             s += 3;
 
@@ -2912,9 +2910,9 @@ static bool_t parse_ait(uint8_t     *section,
           }
 
           descriptor_length_position[0] = descriptor_length;
-          write_12bits(application_descriptors_loop_length_position, application_descriptors_loop_length);
-          write_12bits(application_loop_length_position, application_loop_length);
-          write_12bits(section_length_position, section_length);
+          WRITE_12BITS(application_descriptors_loop_length_position, application_descriptors_loop_length);
+          WRITE_12BITS(application_loop_length_position, application_loop_length);
+          WRITE_12BITS(section_length_position, section_length);
         }
         /* End of transport patch */
 
@@ -2929,7 +2927,7 @@ static bool_t parse_ait(uint8_t     *section,
           { 
             if (show)
             {
-              print_string("      URL base: ", s, URL_base_length);
+              print_string("      URL base: ", s, URL_base_length, PRINT_LEVEL_0);
             }
 
             s += URL_base_length;
@@ -2944,7 +2942,7 @@ static bool_t parse_ait(uint8_t     *section,
             if (show)
             {
               print_output("      URL extension %d: ", k + 1);
-              print_string(NULL, s, URL_extension_length);
+              print_string(NULL, s, URL_extension_length, PRINT_LEVEL_0);
             }
 
             s += URL_extension_length;
@@ -2985,8 +2983,8 @@ static bool_t parse_ait(uint8_t     *section,
 
           if (show)
           {
-            print_buffer("      ", s, selector_bytes_size);
-            print_string("      ", s, selector_bytes_size);
+            print_buffer("      ", s, selector_bytes_size, PRINT_LEVEL_1);
+            print_string("      ", s, selector_bytes_size, PRINT_LEVEL_1);
           }
 
           s += selector_bytes_size;
@@ -3002,10 +3000,10 @@ static bool_t parse_ait(uint8_t     *section,
 
         if (show)
         {
-          print_string("      ", s, descriptor_length);
+          print_string("      ", s, descriptor_length, PRINT_LEVEL_0);
         }
 
-        /* Begining of file patch */
+        /* Begining of file name patch */
         if (NULL != new_ait->url.file)
         {
           length_set_t length_set;
@@ -3031,14 +3029,11 @@ static bool_t parse_ait(uint8_t     *section,
           section_length                      = length_set.l4;
 
           file_descriptor_length_position[0] = descriptor_length;
-          write_12bits(application_descriptors_loop_length_position,
-                       application_descriptors_loop_length);
-          write_12bits(application_loop_length_position,
-                       application_loop_length);
-          write_12bits(section_length_position,
-                       section_length);
+          WRITE_12BITS(application_descriptors_loop_length_position, application_descriptors_loop_length);
+          WRITE_12BITS(application_loop_length_position, application_loop_length);
+          WRITE_12BITS(section_length_position, section_length);
         }
-        /* End of file patch */
+        /* End of file name patch */
 
         s += descriptor_length;
       }
@@ -3050,8 +3045,8 @@ static bool_t parse_ait(uint8_t     *section,
 
         if (show)
         {
-          print_buffer("      ", s, descriptor_length);
-          print_string("      ", s, descriptor_length);
+          print_buffer("      ", s, descriptor_length, PRINT_LEVEL_1);
+          print_string("      ", s, descriptor_length, PRINT_LEVEL_1);
         }
 
         s += descriptor_length;
@@ -3133,7 +3128,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! fatal_message)
       {
-        print_user("%s: unique PID stream id not a TS file !\n",
+        print_output("%s: unique PID stream id not a TS file !\n",
                    __FUNCTION__);
         fatal_message = TRUE;
       }
@@ -3153,7 +3148,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 
         if (! fatal_message)
         {
-          print_user("%s: unique PID stream does not contain any valid PID !\n",
+          print_output("%s: unique PID stream does not contain any valid PID !\n",
                      __FUNCTION__);
           fatal_message = TRUE;
         }
@@ -3179,7 +3174,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
       /* If not EOF, then the problem is more serious */
       if (! issue_message)
       {
-        print_user("%s: reading error in unique PID stream\n",
+        print_output("%s: reading error in unique PID stream\n",
                    __FUNCTION__);
         issue_message = TRUE;
       }
@@ -3192,7 +3187,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! issue_message)
       {
-        print_user("%s: disynchronization in unique PID stream\n",
+        print_output("%s: disynchronization in unique PID stream\n",
                    __FUNCTION__);
         issue_message = TRUE;
       }
@@ -3206,7 +3201,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! invalid_pid_message)
       {
-        print_user("%s: unique PID stream contains invalid pid\n",
+        print_output("%s: unique PID stream contains invalid pid\n",
                    __FUNCTION__);
         invalid_pid_message = TRUE;
       }
@@ -3215,7 +3210,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 
     if (unique_pid == INVALID_PID)
     {
-      print_user("%s: unique PID is 0x%X (%u)\n",
+      print_output("%s: unique PID is 0x%X (%u)\n",
                  __FUNCTION__, pid, pid);
       unique_pid = pid;
       continue;
@@ -3223,8 +3218,8 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 
     if (pid != unique_pid && second_pid == INVALID_PID)
     {
-      print_user("%s: the unique PID stream was supposed to contain one unique PID only\n");
-      print_user("%s: but found at least two, 0x%X (%u) and 0x%X (%u), will keep 0x%X only\n",
+      print_output("%s: the unique PID stream was supposed to contain one unique PID only\n");
+      print_output("%s: but found at least two, 0x%X (%u) and 0x%X (%u), will keep 0x%X only\n",
                  __FUNCTION__, unique_pid, unique_pid, pid, pid, unique_pid);
       second_pid = pid;
       continue;
@@ -3575,7 +3570,7 @@ static unsigned goto_first_packet(FILE *file)
     if (nb != 1)
     {
       /* Reaching EOF while seeking first packet should not happen */
-      print_info("EOF while seeking first packet\n");
+      print1("EOF while seeking first packet\n");
       break;
     }
 
@@ -3644,8 +3639,7 @@ static void parse_ts(const char        *filename,
 
   if (INVALID_BYTE == goto_first_packet(file))
   {
-    print_info("%s: %s is not a TS file\n",
-               __FUNCTION__, filename);
+    print0("%s is not a TS file\n", filename);
     return;
   }
 
@@ -3667,8 +3661,7 @@ static void parse_ts(const char        *filename,
     nb_bytes = fread(packet, 1, TS_PACKET_SIZE, file);
     if (TS_PACKET_SIZE != nb_bytes)
     {
-      print_info("%s: truncated packet\n",
-                 __FUNCTION__);
+      print1("truncated packet\n");
       break;
     }
     assert(packet[0] == TS_SYNCHRO_BYTE);
@@ -3699,7 +3692,7 @@ static void parse_ts(const char        *filename,
       {
         uint16_t extended_table_id;
 
-        section = get_section(packet, TRUE, FALSE);
+        section = get_section(packet, TRUE);
         if (NULL == section)
         {
           extended_table_id = 0xFFFF;
@@ -3719,9 +3712,9 @@ static void parse_ts(const char        *filename,
           }
           else
           {
-            print_error("%s: pid array of %u elements is too small\n",
-                        __FUNCTION__,
-                        sizeof (pid_info_list) / sizeof (pid_info_list[0]));
+            print_error0("pid array of %u elements is too small\n",
+                         sizeof (pid_info_list) / sizeof (pid_info_list[0]));
+            assert(0);
           }
         }
       }
@@ -3745,12 +3738,11 @@ static void parse_ts(const char        *filename,
 
     if (pid == INVALID_PID)
     {
-      print_debug("%s: packet not identified or stuffing\n",
-                  __FUNCTION__);
+      print2("packet not identified or stuffing\n");
     }
     else if (pid == PID_PAT)
     {
-      section = get_section(packet, FALSE, FALSE);
+      section = get_section(packet, FALSE);
       if (NULL != section)
       {
         payload = get_pat_payload(section, &pat_header);
@@ -3799,9 +3791,7 @@ static void parse_ts(const char        *filename,
               rewind_file = TRUE;
             }
 
-            print_debug("%s: got pmt pid %d\n",
-                        __FUNCTION__,
-                        target_prog->pmt_pid);
+            print2("got pmt pid %d\n", target_prog->pmt_pid);
 
             if (IS_ACTIVE(command, REPLACE_PROGRAM_NUMBER) ||
                 IS_ACTIVE(command, REPLACE_PMT_PID))
@@ -3815,7 +3805,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == target_prog->pmt_pid)
     {
-      section = get_section(packet, FALSE, FALSE);
+      section = get_section(packet, FALSE);
       if (NULL != section)
       {
         payload = get_pmt_payload(section, &pmt_header);
@@ -3883,7 +3873,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == PID_SDT)
     {
-      section = get_section(packet, FALSE, FALSE);
+      section = get_section(packet, FALSE);
       if (NULL != section)
       {
         payload = get_sdt_payload(section, &sdt_header);
@@ -3909,7 +3899,7 @@ static void parse_ts(const char        *filename,
     }
     else if (pid == PID_TDT || pid == PID_TOT)
     {
-      section = get_section(packet, FALSE, FALSE);
+      section = get_section(packet, FALSE);
       if (NULL != section)
       {
         if (get_utc_time(section, &utc_time, &section_length))
@@ -3972,7 +3962,7 @@ static void parse_ts(const char        *filename,
               IS_ACTIVE(command, SET_AIT_URL) ||
               IS_ACTIVE(command, SET_AIT_DSMCC)))
     {
-      section = get_section(packet, FALSE, FALSE);
+      section = get_section(packet, FALSE);
       patch_level |= parse_ait(section, ait, &section_length)
                    ? PATCH_LEVEL_PACKET_AND_CRC : PATCH_LEVEL_NONE;
       /* Dont want to increment the version number in this case */
@@ -4031,9 +4021,9 @@ static void parse_ts(const char        *filename,
       */
       section_length += SECTION_HEADER_SIZE;
       section_length -= SECTION_CRC_SIZE;
-      //dump_buffer("before CRC update", section, section_length + SECTION_CRC_SIZE);
+      dump_buffer("before CRC update", section, section_length + SECTION_CRC_SIZE, PRINT_LEVEL_3);
       update_crc32(section, section_length);
-      //dump_buffer("after CRC update", section, section_length + SECTION_CRC_SIZE);
+      dump_buffer("after CRC update", section, section_length + SECTION_CRC_SIZE, PRINT_LEVEL_3);
     }
 
     if (new_file != NULL)
@@ -4072,82 +4062,80 @@ static void parse_ts(const char        *filename,
     show_pid_list(pid_info_list, pid_info_list_size);
   }
 
-  print_info("%s: end of file (%lu packets)\n",
-             __FUNCTION__,
-             nb_packets);
+  print2("end of file (%lu packets)\n", nb_packets);
 }
 
 static void show_version(const char *name)
 {
-  print_user("\n");
-  print_user("%s version %s\n", name, TOOL_VERSION);
-  print_user("\n");
+  print_output("\n");
+  print_output("%s version %s\n", name, TOOL_VERSION);
+  print_output("\n");
 }
 
 static void show_usage(const char *name)
 {
-  print_user("\n");
-  print_user("usage: %s filename.ts [commands]\n", name);
-  print_user("where:\n");
-  print_user("  filename.ts is input transport stream file\n");
-  print_user("  [commands]  is one or several out of\n");
-  print_user("\n");
-  print_user("    selection commands\n");
-  print_user("    -pn <pn>           select a program with program number\n");
-  print_user("                       NOTE: some display and patching commands\n");
-  print_user("                       require a program selection;\n");
-  print_user("                       if none selected then the first program\n");
-  print_user("                       found in PAT will be automatically selected\n");
-  print_user("    -aud <pid>         select a audio PID\n");
-  print_user("    -vid <pid>         select a video PID\n");
-  print_user("\n");
-  print_user("    display commands\n");
-  print_user("    -show-time         display stream date and time\n");
-  print_user("    -show-br           display instant and average bitrates\n");
-  print_user("    -show-pat          display the PAT\n");
-  print_user("    -show-pmt          display the PMT of selected program\n");
-  print_user("    -show-pid          display all detected PIDs\n");
-  print_user("    -show-all-pid      display all PIDs of all packets\n");
-  print_user("    -show-all-pat      display all PATs (limited interest)\n");
+  print_output("\n");
+  print_output("usage: %s filename.ts [commands]\n", name);
+  print_output("where:\n");
+  print_output("  filename.ts is input transport stream file\n");
+  print_output("  [commands]  is one or several out of\n");
+  print_output("\n");
+  print_output("    selection commands\n");
+  print_output("    -pn <pn>           select a program with program number\n");
+  print_output("                       NOTE: some display and patching commands\n");
+  print_output("                       require a program selection;\n");
+  print_output("                       if none selected then the first program\n");
+  print_output("                       found in PAT will be automatically selected\n");
+  print_output("    -aud <pid>         select a audio PID\n");
+  print_output("    -vid <pid>         select a video PID\n");
+  print_output("\n");
+  print_output("    display commands\n");
+  print_output("    -show-time         display stream date and time\n");
+  print_output("    -show-br           display instant and average bitrates\n");
+  print_output("    -show-pat          display the PAT\n");
+  print_output("    -show-pmt          display the PMT of selected program\n");
+  print_output("    -show-pid          display all detected PIDs\n");
+  print_output("    -show-all-pid      display all PIDs of all packets\n");
+  print_output("    -show-all-pat      display all PATs (limited interest)\n");
 #ifdef SUPPORT_SHOW_ALL_PMT
-  print_user("    -show-all-pmt      display all PMTs of selected program (limited interest)\n");
+  print_output("    -show-all-pmt      display all PMTs of selected program (limited interest)\n");
 #endif
-  print_user("    -show-sdt          display the SDT\n");
-  print_user("    -show-ait <pid>    display the AIT identified by its PID\n");
-  print_user("                       also select the AIT PID for -set-ait- commands below\n");
-  print_user("    -show-dsmcc <pid>  display info about DSMCC\n");
-  print_user("\n");
-  print_user("    file patching commands\n");
-  print_user("    -rep-tsid <tsid>   replace transport stream id by new one\n");
-  print_user("    -rep-pn <pn>       replace selected program number by new one\n");
-  print_user("    -rep-pmt <pid>     replace selected program PMT PID by new one\n");
-  print_user("    -rep-pcr <pid>     replace selected program PCR PID by new one\n");
-  print_user("    -rep-aud <pid>     replace selected audio PID or the first audio PID\n");
-  print_user("                       found in selected program PMT by new one\n");
-  print_user("    -rep-vid <pid>     replace selected video PID or the first video PID\n");
-  print_user("                       found in selected program PMT by new one\n");
-  print_user("    -rep-es-pid <pid> <newpid> replace ES PID by new PID in PMT\n");
-  print_user("    -rep-prov <name>   replace provider name in SDT\n");
+  print_output("    -show-sdt          display the SDT\n");
+  print_output("    -show-ait <pid>    display the AIT identified by its PID\n");
+  print_output("                       also select the AIT PID for -set-ait- commands below\n");
+  print_output("    -show-dsmcc <pid>  display info about DSMCC\n");
+  print_output("\n");
+  print_output("    file patching commands\n");
+  print_output("    -rep-tsid <tsid>   replace transport stream id by new one\n");
+  print_output("    -rep-pn <pn>       replace selected program number by new one\n");
+  print_output("    -rep-pmt <pid>     replace selected program PMT PID by new one\n");
+  print_output("    -rep-pcr <pid>     replace selected program PCR PID by new one\n");
+  print_output("    -rep-aud <pid>     replace selected audio PID or the first audio PID\n");
+  print_output("                       found in selected program PMT by new one\n");
+  print_output("    -rep-vid <pid>     replace selected video PID or the first video PID\n");
+  print_output("                       found in selected program PMT by new one\n");
+  print_output("    -rep-es-pid <pid> <newpid> replace ES PID by new PID in PMT\n");
+  print_output("    -rep-prov <name>   replace provider name in SDT\n");
 
   // TODO: allow complete date & time replacement
-  print_user("    -rep-time <time>   where <time> can be either either the 'now' magic word or a year number\n");
+  print_output("    -rep-time <time>   where <time> can be either either the 'now' magic word or a year number\n");
 
-  print_user("    -rep-pid <pid> <newpid>          replace PID value\n");
-  print_user("    -dup-pid <srcpid> <dstpid>       duplicate packets\n");
-  print_user("    -ins-pid <pid> <unique-pid.ts>   insert packets of <unique-pid.ts> after each packet identified by PID\n");
-  print_user("    -crush-pid <pid> <unique-pid.ts> crush packets identified by PID by packets of <unique-pid.ts>\n");
-  print_user("    NOTE: -rep-pid -dup-pid -ins-pid -crush-pid commands are exclusive\n");
-  print_user("    -toggle-tsc <pid> inverse the TSC bits of packets of selected PID\n");
+  print_output("    -rep-pid <pid> <newpid>          replace PID value\n");
+  print_output("    -dup-pid <srcpid> <dstpid>       duplicate packets\n");
+  print_output("    -ins-pid <pid> <unique-pid.ts>   insert packets of <unique-pid.ts> after each packet identified by PID\n");
+  print_output("    -crush-pid <pid> <unique-pid.ts> crush packets identified by PID by packets of <unique-pid.ts>\n");
+  print_output("    NOTE: -rep-pid -dup-pid -ins-pid -crush-pid commands are exclusive\n");
+  print_output("    -toggle-tsc <pid> inverse the TSC bits of packets of selected PID\n");
 
-  print_user("\n");
-  print_user("    special AIT\n");
-  print_user("    -set-ait-id    <app-id>\n");
-  print_user("    -set-ait-url   <url-base> <url-entry-file-name>\n");
-  print_user("    -set-ait-dsmcc <transport-prototcol-label>\n");
-  print_user("\n");
-  print_user("    special HLS\n");
-  print_user("    -hls <duration>    split the input TS file into chunks of duration specified in seconds\n");
-  print_user("                       and create corresponing m3u manifest\n");
+  print_output("\n");
+  print_output("    special AIT\n");
+  print_output("    -set-ait-id    <app-id>\n");
+  print_output("    -set-ait-url   <url-base> <url-entry-file-name>\n");
+  print_output("    -set-ait-dsmcc <transport-prototcol-label>\n");
+  print_output("\n");
+  print_output("    special HLS\n");
+  print_output("    -hls <duration>    split the input TS file into chunks of duration specified in seconds\n");
+  print_output("                       and create corresponing m3u manifest\n");
 }
 
 static uint32_t parse_args(int argc, char **argv,
@@ -4233,7 +4221,7 @@ static uint32_t parse_args(int argc, char **argv,
 
       if (value1 == NULL)
       {
-        print_error("argument missing after %s !", command);
+        print_error0("argument missing after %s !", command);
         exit(0);
       }
 
@@ -4376,7 +4364,7 @@ static uint32_t parse_args(int argc, char **argv,
         else
         {
           /* User command error */
-          print_user("cannot identify command %s\n", command);
+          print_output("cannot identify command %s\n", command);
         }
       }
     }
@@ -4391,7 +4379,7 @@ static uint32_t parse_args(int argc, char **argv,
   exclusive_counter += 0 != user_command & COMMAND_MASK_CRUSH_PID ? 1 : 0;
   if (exclusive_counter > 1)
   {
-    print_user("commands pertaining to PID manipulations are exclusive, please select one only");
+    print_output("commands pertaining to PID manipulations are exclusive, please select one only");
     exit(0);
   }
 
@@ -4406,108 +4394,108 @@ static uint32_t parse_args(int argc, char **argv,
 
   if (INVALID_TRANSPORT_STREAM_ID == rep_prog->tsid)
   {
-    print_user("  - no transport stream id replacing\n");
+    print_output("  - no transport stream id replacing\n");
   }
   else
   {
-    print_user("  - transport stream id of PAT replaced by 0x%X (%u)\n",
+    print_output("  - transport stream id of PAT replaced by 0x%X (%u)\n",
                rep_prog->tsid, rep_prog->tsid);
   }
 
   if (INVALID_PROGRAM_NUMBER == sel_prog->number)
   {
-    print_user("  - no program selected\n");
+    print_output("  - no program selected\n");
   }
   else
   {
-    print_user("  - program with program number 0x%X (%u) selected\n",
+    print_output("  - program with program number 0x%X (%u) selected\n",
                sel_prog->number, sel_prog->number);
   }
 
   if (INVALID_PROGRAM_NUMBER == rep_prog->number)
   {
-    print_user("  - no program number replacing\n");
+    print_output("  - no program number replacing\n");
   }
   else if (INVALID_PROGRAM_NUMBER == sel_prog->number)
   {
-    print_user("  - first program number found in PAT replaced by 0x%X (%u)\n",
+    print_output("  - first program number found in PAT replaced by 0x%X (%u)\n",
                rep_prog->number, rep_prog->number);
   }
   else
   {
-    print_user("  - program number replaced by 0x%X (%u)\n",
+    print_output("  - program number replaced by 0x%X (%u)\n",
                rep_prog->number, rep_prog->number);
   }
 
   if (INVALID_PID == rep_prog->pmt_pid)
   {
-    print_user("  - no PMT PID replacing\n");
+    print_output("  - no PMT PID replacing\n");
   }
   else if (INVALID_PROGRAM_NUMBER == sel_prog->number)
   {
-    print_user("  - PMT PID of first program replaced by 0x%X (%u)\n",
+    print_output("  - PMT PID of first program replaced by 0x%X (%u)\n",
                rep_prog->pmt_pid, rep_prog->pmt_pid);
   }
   else
   {
-    print_user("  - PMT PID replaced by 0x%X (%u)\n",
+    print_output("  - PMT PID replaced by 0x%X (%u)\n",
                rep_prog->pmt_pid, rep_prog->pmt_pid);
   }
 
   if (INVALID_PID == rep_prog->pcr_pid)
   {
-    print_user("  - no PCR PID replacing\n");
+    print_output("  - no PCR PID replacing\n");
   }
   else if (INVALID_PROGRAM_NUMBER == sel_prog->number)
   {
-    print_user("  - PCR PID of first program replaced by 0x%X (%u)\n",
+    print_output("  - PCR PID of first program replaced by 0x%X (%u)\n",
                rep_prog->pcr_pid, rep_prog->pcr_pid);
   }
   else
   {
-    print_user("  - PCR PID replaced by 0x%X (%u)\n",
+    print_output("  - PCR PID replaced by 0x%X (%u)\n",
                rep_prog->pcr_pid, rep_prog->pcr_pid);
   }
 
   if (INVALID_PID == rep_prog->audio_pid)
   {
-    print_user("  - no audio PID replacing\n");
+    print_output("  - no audio PID replacing\n");
   }
   else if (INVALID_PID != sel_prog->audio_pid)
   {
-    print_user("  - audio PID %d (0x%X) replaced by 0x%X (%u)\n",
+    print_output("  - audio PID %d (0x%X) replaced by 0x%X (%u)\n",
                sel_prog->audio_pid, sel_prog->audio_pid,
                rep_prog->audio_pid, rep_prog->audio_pid);
   }
   else if (INVALID_PROGRAM_NUMBER == sel_prog->number)
   {
-    print_user("  - first audio PID of first program replaced by 0x%X (%u)\n",
+    print_output("  - first audio PID of first program replaced by 0x%X (%u)\n",
                rep_prog->audio_pid, rep_prog->audio_pid);
   }
   else
   {
-    print_user("  - first audio PID of selected program replaced by 0x%X (%u)\n",
+    print_output("  - first audio PID of selected program replaced by 0x%X (%u)\n",
                rep_prog->audio_pid, rep_prog->audio_pid);
   }
 
   if (INVALID_PID == rep_prog->video_pid)
   {
-    print_user("  - no video PID replacing\n");
+    print_output("  - no video PID replacing\n");
   }
   else if (INVALID_PID != sel_prog->video_pid)
   {
-    print_user("  - video PID %d (0x%X) replaced by 0x%X (%u)\n",
+    print_output("  - video PID %d (0x%X) replaced by 0x%X (%u)\n",
                sel_prog->video_pid, sel_prog->video_pid,
                rep_prog->video_pid, rep_prog->video_pid);
   }
   else if (INVALID_PROGRAM_NUMBER == sel_prog->number)
   {
-    print_user("  - first video PID of first program replaced by 0x%X (%u)\n",
+    print_output("  - first video PID of first program replaced by 0x%X (%u)\n",
                rep_prog->video_pid, rep_prog->video_pid);
   }
   else
   {
-    print_user("  - first video PID of selected program replaced by 0x%X (%u)\n",
+    print_output("  - first video PID of selected program replaced by 0x%X (%u)\n",
                rep_prog->video_pid, rep_prog->video_pid);
   }
 
@@ -4515,13 +4503,13 @@ static uint32_t parse_args(int argc, char **argv,
       rep_prog->es_pid != INVALID_PID &&
       INVALID_PROGRAM_NUMBER != sel_prog->number)
   {
-    print_user("  - ES PID 0x%X (%u) of selected program replaced by 0x%X (%u)\n",
+    print_output("  - ES PID 0x%X (%u) of selected program replaced by 0x%X (%u)\n",
                sel_prog->es_pid, sel_prog->es_pid,
                rep_prog->es_pid, rep_prog->es_pid);
   }
   else
   {
-    print_user("  - no ES PID replacing\n");
+    print_output("  - no ES PID replacing\n");
     sel_prog->es_pid = INVALID_PID;
     rep_prog->es_pid = INVALID_PID;
     user_command &= ~COMMAND_MASK_REPLACE_ES_PID;
@@ -4529,29 +4517,29 @@ static uint32_t parse_args(int argc, char **argv,
 
   if (0 != strlen(service->name) && INVALID_PROGRAM_NUMBER != sel_prog->number)
   {
-    print_user("  - set provider name of selected program to %s in SDT\n",
+    print_output("  - set provider name of selected program to %s in SDT\n",
                service->name);
   }
 
   if (INVALID_PID != ait->pid)
   {
-    print_user("  - show & select AIT PID 0x%X (%u)\n",
+    print_output("  - show & select AIT PID 0x%X (%u)\n",
                ait->pid, ait->pid);
   }
 
   if (INVALID_PID != sel_prog->dsmcc_pid)
   {
-    print_user("  - show DSMCC info of PID 0x%X (%u)\n",
+    print_output("  - show DSMCC info of PID 0x%X (%u)\n",
                sel_prog->dsmcc_pid, sel_prog->dsmcc_pid);
   }
   else
   {
-    print_user("  - no DSMCC info\n");
+    print_output("  - no DSMCC info\n");
   }
 
   if (0 != (user_command & COMMAND_MASK_SHOW_PID))
   {
-    print_user("  - show all detected PIDs only once\n");
+    print_output("  - show all detected PIDs only once\n");
   }
 
   if (    0 != (user_command & COMMAND_MASK_REPLACE_PID)
@@ -4566,7 +4554,7 @@ static uint32_t parse_args(int argc, char **argv,
       {
         if (*pid2 <= INVALID_PID)
         {
-          print_user("  - %s PID 0x%X (%u) %s 0x%X (%u)\n",
+          print_output("  - %s PID 0x%X (%u) %s 0x%X (%u)\n",
                      0 != user_command & COMMAND_MASK_REPLACE_PID ? "replace" : "duplicate",
                      *pid1, *pid1,
                      0 != user_command & COMMAND_MASK_REPLACE_PID ? "by" : "to",
@@ -4583,13 +4571,13 @@ static uint32_t parse_args(int argc, char **argv,
         {
           if (0 != (user_command & COMMAND_MASK_INSERT_PID))
           {
-            print_user("  - insert packets of %s after PID 0x%X (%u)\n",
+            print_output("  - insert packets of %s after PID 0x%X (%u)\n",
                        *unique_pid_stream_filename,
                        *pid1, *pid1);
           }
           else if (0 != (user_command & COMMAND_MASK_CRUSH_PID))
           {
-            print_user("  - crush PID 0x%X (%u) by packets of %s\n",
+            print_output("  - crush PID 0x%X (%u) by packets of %s\n",
                        *pid1, *pid1,
                        *unique_pid_stream_filename);
           }
@@ -4603,7 +4591,7 @@ static uint32_t parse_args(int argc, char **argv,
 
     if (*pid1 == INVALID_PID)
     {
-      print_user("  - don't make operation on PID because of invalid value\n");
+      print_output("  - don't make operation on PID because of invalid value\n");
       *pid1 = INVALID_PID;
       *pid2 = INVALID_PID;
       *unique_pid_stream_filename = NULL;
@@ -4618,12 +4606,12 @@ static uint32_t parse_args(int argc, char **argv,
   {
     if (0 != ait->id)
     {
-      print_user("  - set AIT application ID to 0x%X (%u)\n",
+      print_output("  - set AIT application ID to 0x%X (%u)\n",
                  ait->id, ait->id);
     }
     else
     {
-      print_user("  - need to select an AIT PID to set the application ID, abort\n");
+      print_output("  - need to select an AIT PID to set the application ID, abort\n");
       init_ait(ait);
       user_command &= ~COMMAND_MASK_SET_AIT_ID;
     }
@@ -4633,12 +4621,12 @@ static uint32_t parse_args(int argc, char **argv,
   {
     if (INVALID_PID != ait->pid)
     {
-      print_user("  - set AIT URL to %s %s\n",
+      print_output("  - set AIT URL to %s %s\n",
                  ait->url.base, ait->url.file);
     }
     else
     {
-      print_user("  - need to select an AIT PID to set the URL, abort\n");
+      print_output("  - need to select an AIT PID to set the URL, abort\n");
       init_ait(ait);
       user_command &= ~COMMAND_MASK_SET_AIT_URL;
     }
@@ -4648,12 +4636,12 @@ static uint32_t parse_args(int argc, char **argv,
   {
     if (INVALID_PID != ait->pid)
     {
-      print_user("  - set AIT to DSMCC with transport protocol label set to 0x%X (%u)\n",
+      print_output("  - set AIT to DSMCC with transport protocol label set to 0x%X (%u)\n",
                  ait->tpl, ait->tpl);
     }
     else
     {
-      print_user("  - need to select an AIT PID to set the DSMCC, abort\n");
+      print_output("  - need to select an AIT PID to set the DSMCC, abort\n");
       init_ait(ait);
       user_command &= ~COMMAND_MASK_SET_AIT_DSMCC;
     }
@@ -4661,7 +4649,7 @@ static uint32_t parse_args(int argc, char **argv,
 
   if (0 != (user_command & COMMAND_MASK_REPLACE_TIME))
   {
-    print_user("  - replace stream time by %02d/%02d/%04d-%02d:%02d:%02d\n",
+    print_output("  - replace stream time by %02d/%02d/%04d-%02d:%02d:%02d\n",
                rep_time->day,
                rep_time->month,
                rep_time->year,
@@ -4672,17 +4660,17 @@ static uint32_t parse_args(int argc, char **argv,
 
   if (INVALID_PID != *tsc_pid)
   {
-    print_user("  - toggle scrambling flag of PID 0x%X (%u)\n",
+    print_output("  - toggle scrambling flag of PID 0x%X (%u)\n",
                *tsc_pid, *tsc_pid);
   }
 
   if (0 != (user_command & COMMAND_MASK_HLS))
   {
-    print_user("  - create HLS chunks of %ds\n",
+    print_output("  - create HLS chunks of %ds\n",
                chunk_duration);
   }
 
-  print_user("\n");
+  print_output("\n");
 
   return user_command;
 }
@@ -4726,7 +4714,7 @@ int main(int argc, char **argv)
 
   if (argc < 2)
   {
-    print_user("wrong number of arguments\n");
+    print_output("wrong number of arguments\n");
     show_usage(toolname);
     show_version(toolname);
     return 0;
@@ -4734,7 +4722,7 @@ int main(int argc, char **argv)
 
   filename = *argv++;
 
-  print_user("%s %s\n", toolname, filename);
+  print_output("%s %s\n", toolname, filename);
 
   user_command = parse_args(argc - 2, argv,
                             &selected_prog,
@@ -4753,7 +4741,7 @@ int main(int argc, char **argv)
   file = fopen(filename, "rb+");
   if (NULL == file)
   {
-    print_user("cannot open %s\n", filename);
+    print_output("cannot open %s\n", filename);
     return 0;
   }
 
@@ -4762,7 +4750,7 @@ int main(int argc, char **argv)
     unique_pid_stream_file = fopen(unique_pid_stream_filename, "rb"); // just read
     if (NULL == unique_pid_stream_file)
     {
-      print_user("cannot open %s\n", unique_pid_stream_file);
+      print_output("cannot open %s\n", unique_pid_stream_file);
       return 0;
     }
   }
@@ -4770,16 +4758,16 @@ int main(int argc, char **argv)
   if (    0 != (user_command & COMMAND_MASK_DUPLICATE_PID)
        || 0 != (user_command & COMMAND_MASK_INSERT_PID))
   {
-    print_debug("create %s\n", new_filename);
+    print1("create %s\n", new_filename);
 
     new_file = fopen(new_filename, "wb");
     if (NULL == new_file)
     {
-      print_user("cannot create %s\n", new_filename);
+      print0("cannot create %s for insertion\n", new_filename);
       return 0;
     }
 
-    print_debug("new file %p\n", new_file);
+    print2("new file %p\n", new_file);
   }
   else
   {
@@ -4812,11 +4800,11 @@ int main(int argc, char **argv)
     close_file(new_file);
 
     // Just to check
-    print_user("input file size = %lu\n", get_file_size(filename));
-    print_user("temp  file size = %lu\n", get_file_size(new_filename));
+    print1("input file size = %lu\n", get_file_size(filename));
+    print1("temp  file size = %lu\n", get_file_size(new_filename));
     if (unique_pid_stream_filename != NULL)
     {
-      print_user("ups  file size = %lu\n", get_file_size(unique_pid_stream_filename));
+      print1("ups  file size = %lu\n", get_file_size(unique_pid_stream_filename));
     }
 
     // Now, the temp file becomes the main file
@@ -4826,17 +4814,17 @@ int main(int argc, char **argv)
 
     if (0 != remove(filename))
     {
-      print_user("remove %s failed\n", filename);
+      print1("remove %s failed\n", filename);
     }
 
     if (0 != rename(new_filename, filename))
     {
-      print_user("rename %s to %s failed\n", new_filename, filename);
+      print1("rename %s to %s failed\n", new_filename, filename);
     }
 #endif
   }
 
-  print_user("%s end\n", toolname);
+  print3("%s end\n", toolname);
 
   return 0;
 }
