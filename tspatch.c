@@ -72,6 +72,7 @@ typedef unsigned long  uint32_t;
 #define PID_PAT  (0x00)
 #define PID_CAT  (0x01)
 #define PID_TSDT (0x02)
+
 #define TID_PAT  (0x00)
 #define TID_CAT  (0x01)
 #define TID_PMT  (0x02)
@@ -394,9 +395,15 @@ static void init_ait(ait_t *ait)
 
 /*
 ** TODO: review, fix and improve trace handling (this is very prehistoric)
-**       also, add -v -vv -vvv options to command line
 **
 **       really, review log levels, it's a real mess
+**
+**
+**       also, there's a question: what is an error ?
+**         - if error when parsing, then it's not a proper error,
+**           it's an error of TS file format, to be reported to user as information
+**         - if error when calling system primitive, then it's a real error
+**         need to review all error messages
 **
 **       at last, review assert and exit usages
 **
@@ -404,7 +411,7 @@ static void init_ait(ait_t *ait)
 **       first idea was to reserve C++ style comments for code that is disabled,
 **       but kept to show an alternative implementation
 **       while C style comments were real comments
-*        but C++ style comments are more convenient, so usage has been deviant
+**       but C++ style comments are more convenient, so usage has been deviant
 */
 
 #define print_output printf // TODO: remove me
@@ -420,9 +427,6 @@ static unsigned print_level = 0;
 #define print1 (print_level >= PRINT_LEVEL_1) && printf
 #define print2 (print_level >= PRINT_LEVEL_2) && printf
 #define print3 (print_level >= PRINT_LEVEL_3) && printf
-
-#define print_error0 printf
-#define print_error1 (print_level >= PRINT_LEVEL_1) && printf
 
 static char get_printable_character(uint8_t c)
 {
@@ -547,21 +551,21 @@ static uint32_t get_file_size(const char *filename)
   file = fopen(filename, "rb");
   if (file == NULL)
   {
-    print_error0("ERROR: cannot open %s\n", filename);
+    print0("cannot open %s\n", filename);
     return 0;
   }
 
   ret = fseek(file, 0, SEEK_END);
   if (0 != ret)
   {
-    print_error0("ERROR: cannot seek in %s\n", filename);
+    print0("ERROR: cannot seek in %s\n", filename); // system error
     return 0;
   }
 
   size = ftell(file);
   if (size < 0)
   {
-    print_error0("ERROR: cannot tell in %s\n", filename);
+    print0("ERROR: cannot tell in %s\n", filename); // system error
     return 0;
   }
 
@@ -578,8 +582,8 @@ static uint16_t get_pid(const uint8_t *packet)
 {
   if (TS_SYNCHRO_BYTE != packet[0])
   { 
-    print_error0("ERROR: lost synchro, got 0x%02X instead of 0x%02X\n",
-                 packet[0], TS_SYNCHRO_BYTE);
+    print0("lost synchro, got 0x%02X synchro byte instead of 0x%02X\n",
+           packet[0], TS_SYNCHRO_BYTE);
     return INVALID_PID;
   }
 
@@ -672,18 +676,26 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
 {
   uint16_t pid;
   uint16_t section_length;
+  uint8_t  transport_error_indicator;
+  uint8_t  payload_unit_start_indicator;
+  uint8_t  transport_priority;
+  uint8_t  transport_scrambling_control;
   uint8_t  adaptation_field_control;
   uint8_t  adaptation_field_length;
+  uint8_t  continuity_counter;
   uint8_t  pointer_field;
   uint8_t  section_syntax_indicator;
   uint8_t  private_indicator;
 
-  pid = get_pid(packet);
+  pid = READ_13BITS(&packet[1]);
 
-  /* Read the adaptation_field_control word */
-  adaptation_field_control = (packet[3] >> 4) & 0x3;
+  transport_error_indicator    = (packet[1] >> 7) & 0x01;
+  payload_unit_start_indicator = (packet[1] >> 6) & 0x01;
+  transport_priority           = (packet[1] >> 5) & 0x01;
+  adaptation_field_control     = (packet[3] >> 4) & 0x03;
+  continuity_counter           = (packet[3] >> 0) & 0x03;
 
-  /* Go after adaptation_field_control */
+  /* Go after 4-bytes header */
   packet += 4;
 
   if (0 == (adaptation_field_control & 0x02))
@@ -692,38 +704,47 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
   }
   else
   {
-    /* Read the adaptation_field_length word + 1 for its own size */
-    adaptation_field_length = 1 + packet[0];
+    adaptation_field_length = 1 + packet[0]; /* +1 for own adaptation_field_length size */
   }
 
   if (adaptation_field_length > (TS_PACKET_SIZE - 4))
   {
     if (try)
     {
-      print_error1("invalid adaptation field\n");
+      print1("invalid adaptation field (len = %u) on pid 0x%X (%u)\n",
+             adaptation_field_length, pid, pid);
     }
     else
     {
-      print_error0("invalid adaptation field\n");
+      print0("invalid adaptation field (len = %u) on pid 0x%X (%u)\n",
+             adaptation_field_length, pid, pid);
     }
     return NULL;
   }
 
-  /* Go to pointer_field */
+  /* Go to payload */
   packet += adaptation_field_length;
 
-  /* Read the pointer_field word + 1 for its own size */
-  pointer_field = 1 + packet[0];
+  if (payload_unit_start_indicator == 0)
+  {
+    print1("not a section start on pid 0x%X (%u)\n",
+           pid, pid);
+    return (uint8_t*)packet;
+  }
+
+  pointer_field = 1 + packet[0]; /* +1 for own pointer_field size */
 
   if (pointer_field > (TS_PACKET_SIZE - 4))
   {
     if (try)
     {
-      print_error1("invalid pointer field\n");
+      print1("invalid pointer field (%u) on pid 0x%X (%u)\n",
+             pointer_field, pid, pid);
     }
     else
     {
-      print_error0("invalid pointer field\n");
+      print0("invalid pointer field (%u) on pid 0x%X (%u)\n",
+             pid, pid, pointer_field);
     }
     return NULL;
   }
@@ -748,13 +769,13 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
     {
       if (try)
       {
-        print_error1("invalid section length 0x%X (%u)\n",
-                     section_length, section_length);
+        print1("invalid section length (%u) on pid 0x%X (%u)\n",
+               section_length, pid, pid);
       }
       else
       {
-        print_error0("invalid section length 0x%X (%u)\n",
-                   section_length, section_length);
+        print0("invalid section length (%u) on pid 0x%X (%u)\n",
+               section_length, pid, pid);
       }
       return NULL;
     }
@@ -765,13 +786,13 @@ static uint8_t *get_section(const uint8_t *packet, bool_t try)
     {
       if (try)
       {
-        print_error1("invalid private section length 0x%X (%u)\n",
-                     section_length, section_length);
+        print1("invalid private section length (%u) on pid 0x%X (%u)\n",
+               section_length, pid, pid);
       }
       else
       {
-        print_error0("invalid private section length 0x%X (%u)\n",
-                   section_length, section_length);
+        print0("invalid private section length (%u) on pid 0x%X (%u)\n",
+               section_length, pid, pid);
       }
       return NULL;
     }
@@ -861,8 +882,7 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
 
   if (0 == size)
   {
-    print_output("%s: no PID found !\n",
-                 __FUNCTION__);
+    print_output("no PID found !\n");
     return;
   }
 
@@ -870,6 +890,10 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
 
   /*
   ** Sort the list in PID order
+  */
+
+  /*
+  ** TODO: fix doubles
   */
 
   for (i = 0; i < size; i++)
@@ -899,27 +923,23 @@ static void show_pid_list(packet_info_t *list, uint32_t size)
   ** Show the list
   */
 
-  print_output("%s: found %lu different PIDs\n",
-               __FUNCTION__, nb_pids);
+  print_output("found %lu different PIDs\n", nb_pids);
   for (i = 0; i < size; i++)
   {
     if (list[i].pid < 0x20)
     {
-      print_output("%s:   - 0x%04X (%u) - %s\n",
-                   __FUNCTION__,
+      print_output("   - 0x%04X (%u) - %s\n",
                    list[i].pid, list[i].pid,
                    get_section_name(list[i].pid, list[i].tid));
     }
     else if (0xFFFF == list[i].tid)
     {
-      print_output("%s:   - 0x%04X (%u) - PES\n",
-                   __FUNCTION__,
+      print_output("   - 0x%04X (%u) - PES\n",
                    list[i].pid, list[i].pid);
     }
     else
     {
-      print_output("%s:   - 0x%04X (%u) - PES or SECTION with table_id = 0x%02X (%u)\n",
-                   __FUNCTION__,
+      print_output("   - 0x%04X (%u) - PES or SECTION with table_id 0x%02X (%u)\n",
                    list[i].pid, list[i].pid,
                    list[i].tid, list[i].tid);
     }
@@ -990,8 +1010,7 @@ static void show_bitrate(uint16_t pid, const packet_time_t *time)
     instant_bitrate = get_bitrate(time, &previous_time, &duration);
     average_bitrate = get_bitrate(time, &first_time, &duration);
 
-    print_output("%s: on pid 0x%X, instant bitrate = %lubps, average bitrate = %lubps, time = %lus\n",
-                 __FUNCTION__,
+    print_output(" on pid 0x%X, instant bitrate = %lubps, average bitrate = %lubps, time = %lus\n",
                  pid, instant_bitrate, average_bitrate, duration);
   }
 
@@ -1163,6 +1182,11 @@ static const char *get_section_name(uint16_t pid, uint8_t table_id)
     return "CAT";
   }
 
+  if (PID_TSDT == pid)
+  {
+    return "TSDT";
+  }
+
   if (PID_NIT == pid && TID_NIT_ACTUAL == table_id)
   {
     return "NIT ACTUAL";
@@ -1226,7 +1250,7 @@ static const char *get_section_name(uint16_t pid, uint8_t table_id)
     return "PMT";
   }
 
-  return "OTHER";
+  return "unknown section";
 }
 
 static const char *get_descriptor_name(uint8_t descriptor_tag)
@@ -1348,8 +1372,8 @@ static const uint8_t *get_pat_payload(const uint8_t *section,
 {
   if (TID_PAT != section[0])
   {
-    print_error1("ERROR: not a PAT, TID=0x%02X (%u)\n",
-                 section[0], section[0]);
+    print1("not a PAT, TID=0x%02X (%u)\n",
+           section[0], section[0]);
     return NULL;
   }
 
@@ -1637,7 +1661,7 @@ static const uint8_t *get_pmt_payload(const uint8_t *section,
 
   if (TID_PMT != section[0])
   {
-    print_error1("ERROR: not a PMT, TID=0x%02X\n", section[0]);
+    print1("not a PMT, TID=0x%02X\n", section[0]);
     return NULL;
   }
 
@@ -1931,8 +1955,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
   if (TID_SDT_ACTUAL != section[0])
   //if (TID_SDT_ACTUAL != section[0] && TID_SDT_OTHER != section[0])
   {
-    print_error1("not a SDT, TID=%d (0x%02X)\n",
-                 section[0], section[0]);
+    print1("not a SDT, TID=%d (0x%02X)\n",
+           section[0], section[0]);
     return NULL;
   }
 
@@ -1975,8 +1999,8 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
   {
     if (loop_size < SDT_LOOP_MINIMUM_SIZE)
     {
-      print_error0("SDT loop (size = %d) not complete\n",
-                   loop_size);
+      print0("SDT loop (size = %d) not complete\n",
+             loop_size);
       return NULL;
     }
     loop_size -= SDT_LOOP_MINIMUM_SIZE;
@@ -1985,7 +2009,7 @@ static const uint8_t *get_sdt_payload(const uint8_t *section,
 
     if (loop_size < descriptors_loop_length)
     {
-      print_error0("ERROR: SDT descriptors loop not complete\n");
+      print0("SDT descriptors loop not complete\n");
       return NULL;
     }
     loop_size -= descriptors_loop_length;
@@ -2064,6 +2088,11 @@ static void show_sdt(const sdt_header_t *header,
       }
       else if (DESCRIPTOR_TAG_MULTILINGUAL_SERVICE_NAME == descriptor_tag)
       {
+        print_string("          multi-lang: ", service, descriptor_length, PRINT_LEVEL_0);
+      }
+      else
+      {
+        print_buffer("          ", service, descriptor_length, PRINT_LEVEL_0);
       }
 
       service += descriptor_length;
@@ -2074,7 +2103,7 @@ static void show_sdt(const sdt_header_t *header,
       }
       else
       {
-        print_error1("ERROR: SDT loop is not correct\n");
+        print1("SDT loop is not correct\n");
         descriptors_loop_length = 0;
       }
     }
@@ -2155,8 +2184,7 @@ static bool_t patch_sdt_provider_name(const sdt_header_t *header,
 
         memcpy(buffer, spn, service_provider_name_length); /* debug */
         buffer[service_provider_name_length] = 0;
-        print_output("%s: replace %s by %s\n",
-                     __FUNCTION__,
+        print_output("replace %s by %s\n",
                      buffer, new_svc->name);
 
         /*
@@ -3191,7 +3219,7 @@ static void show_dsmcc(const uint8_t *packet, const uint8_t *section, uint16_t p
 
   if (entry)
   {
-    dump_buffer(buffer_name, buffer, 32, PRINT_LEVEL_0);
+    dump_buffer(buffer_name, buffer, 32, PRINT_LEVEL_1);
   }
 }
 
@@ -3313,8 +3341,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! fatal_message)
       {
-        print_output("%s: unique PID stream id not a TS file !\n",
-                   __FUNCTION__);
+        print_output("unique PID stream id not a TS file !\n");
         fatal_message = TRUE;
       }
       return FALSE;
@@ -3333,8 +3360,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 
         if (! fatal_message)
         {
-          print_output("%s: unique PID stream does not contain any valid PID !\n",
-                     __FUNCTION__);
+          print_output("unique PID stream does not contain any valid PID !\n");
           fatal_message = TRUE;
         }
         success = FALSE;
@@ -3359,8 +3385,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
       /* If not EOF, then the problem is more serious */
       if (! issue_message)
       {
-        print_output("%s: reading error in unique PID stream\n",
-                   __FUNCTION__);
+        print_output("reading error in unique PID stream\n");
         issue_message = TRUE;
       }
       position = INVALID_BYTE; // try to restart from beginning next time
@@ -3372,8 +3397,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! issue_message)
       {
-        print_output("%s: disynchronization in unique PID stream\n",
-                   __FUNCTION__);
+        print_output("disynchronization in unique PID stream\n");
         issue_message = TRUE;
       }
       position = INVALID_BYTE; // try to restart from beginning next time
@@ -3386,8 +3410,7 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
     {
       if (! invalid_pid_message)
       {
-        print_output("%s: unique PID stream contains invalid pid\n",
-                   __FUNCTION__);
+        print_output("unique PID stream contains invalid pid\n");
         invalid_pid_message = TRUE;
       }
       continue;
@@ -3395,17 +3418,17 @@ static bool_t get_next_unique_pid_packet(FILE *file, uint8_t *packet)
 
     if (unique_pid == INVALID_PID)
     {
-      print_output("%s: unique PID is 0x%X (%u)\n",
-                 __FUNCTION__, pid, pid);
+      print_output("unique PID is 0x%X (%u)\n",
+                   pid, pid);
       unique_pid = pid;
       continue;
     }
 
     if (pid != unique_pid && second_pid == INVALID_PID)
     {
-      print_output("%s: the unique PID stream was supposed to contain one unique PID only\n");
-      print_output("%s: but found at least two, 0x%X (%u) and 0x%X (%u), will keep 0x%X only\n",
-                 __FUNCTION__, unique_pid, unique_pid, pid, pid, unique_pid);
+      print_output("the unique PID stream was supposed to contain one unique PID only\n");
+      print_output("but found at least two, 0x%X (%u) and 0x%X (%u), will keep 0x%X only\n",
+                   unique_pid, unique_pid, pid, pid, unique_pid);
       second_pid = pid;
       continue;
     }
@@ -3598,18 +3621,19 @@ static void proceed_hls(const char    *filename,
 
 typedef enum
 {
+  SET_VERBOSE,
   SHOW_ALL_PID,
+#ifdef SUPPORT_SHOW_ALL_XXT
   SHOW_ALL_PAT,
-#ifdef SUPPORT_SHOW_ALL_PMT
   SHOW_ALL_PMT,
-#endif
   SHOW_ALL_SDT,
+#endif
+  SHOW_PID,
   SHOW_PAT,
   SHOW_PMT,
   SHOW_SDT,
   SHOW_AIT,
   SHOW_DSMCC,
-  SHOW_PID,
   SHOW_TIME,
   SHOW_BR,
   SELECT_PROGRAM_NUMBER,
@@ -3656,18 +3680,19 @@ typedef enum
 
 static const char *command_string[NB_COMMANDS] =
 {
+  "-v",
   "-show-all-pid",
+#ifdef SUPPORT_SHOW_ALL_XXT
   "-show-all-pat",
-#ifdef SUPPORT_SHOW_ALL_PMT
   "-show-all-pmt",
-#endif
   "-show-all-sdt",
+#endif
+  "-show-pid",
   "-show-pat",
   "-show-pmt",
   "-show-sdt",
   "-show-ait",
   "-show-dsmcc",
-  "-show-pid",
   "-show-time",
   "-show-br",
   "-pn",
@@ -3700,18 +3725,19 @@ static const char *command_string[NB_COMMANDS] =
 
 typedef enum
 {
+  DECLARE_COMMAND_MASK(SET_VERBOSE),
   DECLARE_COMMAND_MASK(SHOW_ALL_PID),
+#ifdef SUPPORT_SHOW_ALL_XXT
   DECLARE_COMMAND_MASK(SHOW_ALL_PAT),
-#ifdef SUPPORT_SHOW_ALL_PMT
   DECLARE_COMMAND_MASK(SHOW_ALL_PMT),
-#endif
   DECLARE_COMMAND_MASK(SHOW_ALL_SDT),
+#endif
+  DECLARE_COMMAND_MASK(SHOW_PID),
   DECLARE_COMMAND_MASK(SHOW_PAT),
   DECLARE_COMMAND_MASK(SHOW_PMT),
   DECLARE_COMMAND_MASK(SHOW_SDT),
   DECLARE_COMMAND_MASK(SHOW_AIT),
   DECLARE_COMMAND_MASK(SHOW_DSMCC),
-  DECLARE_COMMAND_MASK(SHOW_PID),
   DECLARE_COMMAND_MASK(SHOW_TIME),
   DECLARE_COMMAND_MASK(SHOW_BR),
   DECLARE_COMMAND_MASK(SELECT_PROGRAM_NUMBER),
@@ -3868,37 +3894,36 @@ static void parse_ts(const char        *filename,
 
       if (IS_ACTIVE(command, SHOW_ALL_PID))
       {
-        print_output("%s: packet #%ld pid %d\n",
-                     __FUNCTION__,
-                     nb_packets, pid);
+        print_output("packet #%ld pid 0x%X (%u)\n",
+                     nb_packets, pid, pid);
       }
 
       if (IS_ACTIVE(command, SHOW_PID))
       {
-        uint16_t extended_table_id;
+        uint16_t table_id;
 
         section = get_section(packet, TRUE);
         if (NULL == section)
         {
-          extended_table_id = 0xFFFF;
+          table_id = 0xFFFF;
         }
         else
         {
-          extended_table_id = section[0];
+          table_id = section[0];
         }
 
-        if (! is_pid_in_list(pid, extended_table_id, pid_info_list, pid_info_list_size))
+        if (! is_pid_in_list(pid, table_id, pid_info_list, pid_info_list_size))
         {
           if (pid_info_list_size < sizeof (pid_info_list) / sizeof (pid_info_list[0]))
           {
             pid_info_list[pid_info_list_size].pid = pid;
-            pid_info_list[pid_info_list_size].tid = extended_table_id;
+            pid_info_list[pid_info_list_size].tid = table_id;
             pid_info_list_size++;
           }
           else
           {
-            print_error0("pid array of %u elements is too small\n",
-                         sizeof (pid_info_list) / sizeof (pid_info_list[0]));
+            print0("ERROR: pid array of %u elements is too small\n",
+                   sizeof (pid_info_list) / sizeof (pid_info_list[0]));
             assert(0);
           }
         }
@@ -3936,9 +3961,12 @@ static void parse_ts(const char        *filename,
           section_length = pat_header.section_length;
           target_prog->tsid = pat_header.transport_stream_id;
 
-          if (IS_ACTIVE(command, SHOW_ALL_PAT) ||
-              (IS_ACTIVE(command, SHOW_PAT) &&
-              pat_header.version_number != pat_version_number))
+          if ((IS_ACTIVE(command, SHOW_PAT) &&
+              pat_header.version_number != pat_version_number)
+#ifdef SUPPORT_SHOW_ALL_XXT
+              || IS_ACTIVE(command, SHOW_ALL_PAT)
+#endif
+             )
           {
             show_pat(&pat_header, payload);
             pat_version_number = pat_header.version_number;
@@ -4001,7 +4029,7 @@ static void parse_ts(const char        *filename,
           if ((IS_ACTIVE(command, SHOW_PMT) &&
               pmt_header.program_number == target_prog->number &&
               pmt_header.version_number != pmt_version_number)
-#ifdef SUPPORT_SHOW_ALL_PMT
+#ifdef SUPPORT_SHOW_ALL_XXT
               || IS_ACTIVE(command, SHOW_ALL_PMT)
 #endif
              )
@@ -4066,9 +4094,12 @@ static void parse_ts(const char        *filename,
         {
           section_length = sdt_header.section_length;
 
-          if (IS_ACTIVE(command, SHOW_ALL_SDT) ||
-              (IS_ACTIVE(command, SHOW_SDT) &&
-              sdt_header.version_number != sdt_version_number))
+          if ((IS_ACTIVE(command, SHOW_SDT) &&
+              sdt_header.version_number != sdt_version_number)
+#ifdef SUPPORT_SHOW_ALL_XXT
+               || IS_ACTIVE(command, SHOW_ALL_SDT)
+#endif
+             )
           {
             show_sdt(&sdt_header, payload);
             sdt_version_number = sdt_header.version_number;
@@ -4267,6 +4298,8 @@ static void show_usage(const char *name)
   print_output("  filename.ts is input transport stream file\n");
   print_output("  [commands]  is one or several out of\n");
   print_output("\n");
+  print_output("    -v <level>         set verbosity level, from 0 the lowest, to 3 the highest\n");
+  print_output("\n");
   print_output("    selection commands\n");
   print_output("    -pn <pn>           select a program with program number\n");
   print_output("                       NOTE: some display and patching commands\n");
@@ -4277,17 +4310,18 @@ static void show_usage(const char *name)
   print_output("    -vid <pid>         select a video PID\n");
   print_output("\n");
   print_output("    display commands\n");
-  print_output("    -show-time         display stream date and time\n");
+  print_output("    -show-time         display stream date and time (from DVB tables)\n");
   print_output("    -show-br           display instant and average bitrates\n");
   print_output("    -show-pat          display the PAT\n");
   print_output("    -show-pmt          display the PMT of selected program\n");
+  print_output("    -show-sdt          display the SDT\n");
   print_output("    -show-pid          display all detected PIDs\n");
   print_output("    -show-all-pid      display all PIDs of all packets\n");
+#ifdef SUPPORT_SHOW_ALL_XXT
   print_output("    -show-all-pat      display all PATs (limited interest)\n");
-#ifdef SUPPORT_SHOW_ALL_PMT
   print_output("    -show-all-pmt      display all PMTs of selected program (limited interest)\n");
+  print_output("    -show-all-sdt      display all SDTs (limited interest)\n");
 #endif
-  print_output("    -show-sdt          display the SDT\n");
   print_output("    -show-ait <pid>    display the AIT identified by its PID\n");
   print_output("                       also select the AIT PID for -set-ait- commands below\n");
   print_output("    -show-dsmcc <pid>  display info about DSMCC\n");
@@ -4363,28 +4397,28 @@ static uint32_t parse_args(int argc, char **argv,
     {
       user_command |= COMMAND_MASK_SHOW_PAT;
     }
-    else if (IS_COMMAND(command, SHOW_ALL_PAT))
-    {
-      user_command |= COMMAND_MASK_SHOW_ALL_PAT;
-    }
     else if (IS_COMMAND(command, SHOW_PMT))
     {
       user_command |= COMMAND_MASK_SHOW_PMT;
     }
-#ifdef SUPPORT_SHOW_ALL_PMT
-    else if (IS_COMMAND(command, SHOW_ALL_PMT))
-    {
-      user_command |= COMMAND_MASK_SHOW_ALL_PMT;
-    }
-#endif
     else if (IS_COMMAND(command, SHOW_SDT))
     {
       user_command |= COMMAND_MASK_SHOW_SDT;
+    }
+#ifdef SUPPORT_SHOW_ALL_XXT
+    else if (IS_COMMAND(command, SHOW_ALL_PAT))
+    {
+      user_command |= COMMAND_MASK_SHOW_ALL_PAT;
+    }
+    else if (IS_COMMAND(command, SHOW_ALL_PMT))
+    {
+      user_command |= COMMAND_MASK_SHOW_ALL_PMT;
     }
     else if (IS_COMMAND(command, SHOW_ALL_SDT))
     { 
       user_command |= COMMAND_MASK_SHOW_ALL_SDT;
     }
+#endif
     else if (IS_COMMAND(command, SHOW_PID))
     { 
       user_command |= COMMAND_MASK_SHOW_PID;
@@ -4408,11 +4442,19 @@ static uint32_t parse_args(int argc, char **argv,
 
       if (value1 == NULL)
       {
-        print_error0("argument missing after %s !", command);
+        print0("argument missing after %s !", command);
         exit(0);
       }
 
-      if (IS_COMMAND(command, SELECT_PROGRAM_NUMBER))
+      if (IS_COMMAND(command, SET_VERBOSE))
+      {
+        print_level = atoi(value1);
+        if (print_level > PRINT_LEVEL_3)
+        {
+          print_level = PRINT_LEVEL_0;
+        }
+      }
+      else if (IS_COMMAND(command, SELECT_PROGRAM_NUMBER))
       {
         sel_prog->number = atoi(value1);
       }
@@ -4578,6 +4620,11 @@ static uint32_t parse_args(int argc, char **argv,
   **       some others by checking user command,
   **       need more harmony
   */
+
+  if (print_level > PRINT_LEVEL_0)
+  {
+    print_output("  - verbosity level = %u\n", print_level);
+  }
 
   if (INVALID_TRANSPORT_STREAM_ID == rep_prog->tsid)
   {
