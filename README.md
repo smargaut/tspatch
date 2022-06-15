@@ -6,7 +6,9 @@ Simple tool to work on a TS file
 
 This tool does not follow any spec, it is just being implemented on demand, started in 2011.
 
-Tool in the shape of one-source-code file, because it's my choice.
+Tool in the shape of one-source-code C file, because it's my choice.
+
+Also, code is naive, and is certainly not at quality level for production.
  
 Compilation on Linux:
 gcc -m32 tspatch.ts -o tspatch
