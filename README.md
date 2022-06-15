@@ -1,6 +1,6 @@
 # tspatch
 
-Simple tool to work on a TS file
+Simple tool to work on a MPEG/DVB TS file
 - parse and show some information
 - make some changes
 
